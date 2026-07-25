@@ -1,11 +1,11 @@
-import { LoaderCircle, MapPin, Package, Plus, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
+import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
-import { aiExtractAssets } from "@/services/storyboard-ai";
+import { aiExtractAssets, aiRegenerateAsset } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
 import type { PromptCategory } from "@/types/prompt-studio";
@@ -77,6 +77,27 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
         message.success(`「${name}」关键词已发送到提示词工作台`);
     };
 
+    /** 重新生成单个资产 */
+    const [regenId, setRegenId] = useState<string | null>(null);
+    const regenerateOne = async (id: string, name: string, type: "characters" | "locations" | "props" | "products") => {
+        setRegenId(id);
+        setProcessing(true);
+        try {
+            const result = await aiRegenerateAsset(config, current.script, type, name);
+            const patch = { ...result, id, name: (result.name as string) || name };
+            if (type === "characters") updateCharacter(id, patch as Partial<CharacterAsset>);
+            else if (type === "locations") updateLocation(id, patch as Partial<LocationAsset>);
+            else if (type === "props") updateProp(id, patch as Partial<PropAsset>);
+            else updateProduct(id, patch as Partial<ProductAsset>);
+            message.success(`「${name}」已重新生成`);
+        } catch (error) {
+            onError(error instanceof Error ? error.message : "重新生成失败");
+        } finally {
+            setRegenId(null);
+            setProcessing(false);
+        }
+    };
+
     return (
         <div className="mx-auto max-w-4xl">
             <div className="mb-6 flex items-center justify-between">
@@ -121,6 +142,8 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 onAdd={() => setAssets({ ...assets, characters: [...assets.characters, { id: nanoid(), name: "新角色", appearance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, characters: assets.characters.filter((c) => c.id !== id) })}
                                 onSend={(c) => void sendToPromptStudio(c.name, c.keywords, "character")}
+                                onRegen={(c) => void regenerateOne(c.id, c.name, "characters")}
+                                regenId={regenId}
                                 render={(c: CharacterAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={c.name} onChange={(e) => updateCharacter(c.id, { name: e.target.value })} placeholder="角色名" addonBefore="名称" />
@@ -143,6 +166,8 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 onAdd={() => setAssets({ ...assets, locations: [...assets.locations, { id: nanoid(), name: "新场景", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, locations: assets.locations.filter((l) => l.id !== id) })}
                                 onSend={(l) => void sendToPromptStudio(l.name, l.keywords, "scene")}
+                                onRegen={(l) => void regenerateOne(l.id, l.name, "locations")}
+                                regenId={regenId}
                                 render={(l: LocationAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={l.name} onChange={(e) => updateLocation(l.id, { name: e.target.value })} placeholder="场景名" addonBefore="名称" />
@@ -167,6 +192,8 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 onAdd={() => setAssets({ ...assets, props: [...assets.props, { id: nanoid(), name: "新道具", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, props: assets.props.filter((p) => p.id !== id) })}
                                 onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "prop")}
+                                onRegen={(p) => void regenerateOne(p.id, p.name, "props")}
+                                regenId={regenId}
                                 render={(p: PropAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={p.name} onChange={(e) => updateProp(p.id, { name: e.target.value })} placeholder="道具名" addonBefore="名称" />
@@ -188,6 +215,8 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 onAdd={() => setAssets({ ...assets, products: [...assets.products, { id: nanoid(), name: "新产品", appearance: "", significance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, products: assets.products.filter((p) => p.id !== id) })}
                                 onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "product")}
+                                onRegen={(p) => void regenerateOne(p.id, p.name, "products")}
+                                regenId={regenId}
                                 render={(p: ProductAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} placeholder="产品名" addonBefore="名称" />
@@ -208,12 +237,14 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 }
 
 // ─── 通用资产卡片列表 ───
-function AssetCardList<T extends { id: string; name: string; keywords: string }>({ items, empty, onAdd, onRemove, onSend, render }: {
+function AssetCardList<T extends { id: string; name: string; keywords: string }>({ items, empty, onAdd, onRemove, onSend, onRegen, regenId, render }: {
     items: T[];
     empty: string;
     onAdd: () => void;
     onRemove: (id: string) => void;
     onSend?: (item: T) => void;
+    onRegen?: (item: T) => void;
+    regenId?: string | null;
     render: (item: T) => React.ReactNode;
 }) {
     if (items.length === 0) {
@@ -232,6 +263,11 @@ function AssetCardList<T extends { id: string; name: string; keywords: string }>
                 <Card key={item.id} size="small" className="group bg-stone-50 dark:bg-stone-900/50" title={<span className="text-sm font-medium">{item.name}</span>}
                     extra={
                         <div className="flex items-center gap-0.5">
+                            {onRegen && (
+                                <Tooltip title="AI 重新生成此项">
+                                    <Button type="text" size="small" icon={<RefreshCw className={`size-3.5 ${regenId === item.id ? "animate-spin" : ""}`} />} className="opacity-0 transition group-hover:opacity-100" disabled={regenId === item.id} onClick={() => onRegen(item)} />
+                                </Tooltip>
+                            )}
                             {onSend && (
                                 <Tooltip title="发送关键词到提示词工作台">
                                     <Button type="text" size="small" icon={<Send className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" onClick={() => onSend(item)} />

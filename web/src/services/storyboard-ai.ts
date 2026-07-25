@@ -80,6 +80,26 @@ export async function aiExtractAssets(config: AiConfig, script: string, onDelta?
     });
 }
 
+/** 重新生成单个资产（对某一项不满意时使用） */
+export async function aiRegenerateAsset(config: AiConfig, script: string, assetType: "characters" | "locations" | "props" | "products", assetName: string, onDelta?: (text: string) => void): Promise<Record<string, unknown>> {
+    return withRetry(async () => {
+        const typeLabel = { characters: "角色", locations: "场景/地点", props: "道具", products: "产品/品牌" }[assetType];
+        const systemPrompt = `你是一位资深影视美术指导。用户会给你一段剧本和一个已有的${typeLabel}名称「${assetName}」，你需要重新为该${typeLabel}生成更详细、更专业的视觉描述。
+
+输出要求：
+1. 仅输出该单个${typeLabel}的 JSON 对象（不要数组）
+2. 字段与原来一致，但描述要更具体、更可视化
+3. keywords 用英文逗号分隔，适合作为 AI 生图提示词
+4. 严格以 JSON 格式输出，不要输出任何其他文字`;
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `剧本：\n${script}\n\n请重新生成${typeLabel}「${assetName}」的详细视觉描述：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        return parseJsonObject<Record<string, unknown>>(raw);
+    });
+}
+
 // ─── Skill: 场景拆分 ─────────────────────────────────────────────
 
 const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师，擅长广告片、微电影、MV、纪录片、动画的节奏把控。用户会给你一段剧本/故事文本，你需要将其拆分为独立的场景。
