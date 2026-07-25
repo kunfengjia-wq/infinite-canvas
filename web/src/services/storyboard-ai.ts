@@ -62,6 +62,9 @@ keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔�
   结构：character design sheet, [视图], [主体描述], [外貌细节], [服装], [姿势], white background, reference sheet, concept art
   必须包含：character design sheet / turnaround / front view, side view, back view / T-pose / white background / clean background
   禁止包含：任何场景、环境、背景描述（如 in a room, forest, city）
+  禁止包含：手持道具、武器、配件（如 holding sword, with bag）——道具单独提取
+  禁止包含：其他角色、动物、陪衬物（如 with friend, accompanied by dog）
+  角色必须是独立的、干净的、无附属物的纯角色设定图
   示例："character design sheet, front view, side view, back view, young woman, long straight black hair, emerald green eyes, oval face, slim figure, crimson silk cheongsam, gold hoop earrings, neutral T-pose, white background, reference sheet, concept art, ultra detailed"
   示例翻译："角色设计图, 正面视图, 侧面视图, 背面视图, 年轻女性, 黑色长直发, 翠绿色眼睛, 鹅蛋脸, 纤细身材, 深红色丝绸旗袍, 金色圈形耳环, 中性T字姿势, 白色背景, 参考图, 概念艺术, 超精细"
 
@@ -108,7 +111,7 @@ export async function aiRegenerateAsset(config: AiConfig, script: string, assetT
     return withRetry(async () => {
         const typeLabel = { characters: "角色", locations: "场景/地点", props: "道具", products: "产品/品牌" }[assetType];
         const keywordRules: Record<string, string> = {
-            characters: "keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, concept art' 结尾。禁止包含任何场景/环境。",
+            characters: "keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, concept art' 结尾。禁止包含任何场景/环境。禁止包含手持道具、武器、其他角色、动物——角色必须是独立干净的纯角色设定图。",
             locations: "keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 'wide angle, cinematic' 结尾。",
             props: "keywords 必须是孤立物体：以物体名+材质/颜色开头，以 'isolated object, white background, studio lighting, product photography, close-up' 结尾。禁止包含环境/人物。",
             products: "keywords 必须是商业产品照格式：以产品名+外观开头，以 'clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial' 结尾。",
