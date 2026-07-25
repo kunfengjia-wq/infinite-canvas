@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Empty, Input, Popconfirm, Radio, Select, Tabs, Tooltip } from "antd";
+import { App, Button, Card, Checkbox, Empty, Input, Popconfirm, Radio, Select, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
@@ -125,6 +125,43 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
         setSendPanel(null);
     };
 
+    /** 批量导出到提示词工作台 */
+    const [batchOpen, setBatchOpen] = useState(false);
+    const [batchTypes, setBatchTypes] = useState<string[]>(["character", "scene", "prop", "product"]);
+    const [batchStyle, setBatchStyle] = useState("photorealistic");
+    const [batchPlatform, setBatchPlatform] = useState("midjourney");
+
+    /** 每种资产类型的默认视图格式 */
+    const DEFAULT_FORMAT: Record<string, string> = { character: "four-panel", scene: "wide", prop: "single", product: "hero" };
+    const TYPE_LABEL: Record<string, string> = { character: "角色", scene: "场景", prop: "道具", product: "产品" };
+
+    const typeItems = (type: string): { name: string; keywords: string }[] => {
+        if (type === "character") return assets.characters.map((c) => ({ name: c.name, keywords: c.keywords }));
+        if (type === "scene") return assets.locations.map((l) => ({ name: l.name, keywords: l.keywords }));
+        if (type === "prop") return assets.props.map((p) => ({ name: p.name, keywords: p.keywords }));
+        return assets.products.map((p) => ({ name: p.name, keywords: p.keywords }));
+    };
+
+    const doBatchSend = async () => {
+        const style = STYLE_OPTIONS.find((s) => s.value === batchStyle);
+        const store = usePromptStudioStore.getState();
+        if (!store.current) await store.createProject(`分镜资产-${current.title}`);
+        let count = 0;
+        for (const type of batchTypes) {
+            const options = FORMAT_OPTIONS[type] || FORMAT_OPTIONS.prop;
+            const fmt = options.find((o) => o.value === DEFAULT_FORMAT[type]);
+            for (const item of typeItems(type)) {
+                if (!item.keywords.trim()) continue;
+                const body = fmt ? fmt.template.replace("{subject}", item.keywords) : item.keywords;
+                const finalPrompt = style ? `${body} ${style.suffix}` : body;
+                usePromptStudioStore.getState().addEntry({ input: item.name, platform: batchPlatform, prompt: finalPrompt, category: type as PromptCategory, style: style?.label });
+                count++;
+            }
+        }
+        message.success(`已批量导出 ${count} 项资产到提示词工作台（${PLATFORM_LIST.find((p) => p.id === batchPlatform)?.label || batchPlatform}）`);
+        setBatchOpen(false);
+    };
+
     /** 重新生成单个资产 */
     const [regenId, setRegenId] = useState<string | null>(null);
     const regenerateOne = async (id: string, name: string, type: "characters" | "locations" | "props" | "products") => {
@@ -172,6 +209,9 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                             {extracting ? "AI 提取中..." : "AI 提取资产"}
                         </Button>
                     )}
+                    <Button icon={<Send className="size-4" />} disabled={total === 0} onClick={() => setBatchOpen(true)}>
+                        批量导出到提示词工作台
+                    </Button>
                     <Button type="primary" disabled={total === 0} onClick={handleConfirm}>
                         确认资产（{total} 项）→ 下一步
                     </Button>
@@ -314,6 +354,46 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                             <div className="flex justify-end gap-2 pt-2">
                                 <Button size="small" onClick={() => setSendPanel(null)}>取消</Button>
                                 <Button size="small" type="primary" icon={<Send className="size-3.5" />} onClick={() => void doSend()}>确认发送</Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 批量导出到提示词工作台 */}
+            {batchOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setBatchOpen(false)}>
+                    <div className="w-[420px] rounded-xl bg-white p-5 shadow-2xl dark:bg-stone-800" onClick={(e) => e.stopPropagation()}>
+                        <h4 className="mb-1 text-sm font-semibold">批量导出资产到提示词工作台</h4>
+                        <p className="mb-3 text-xs text-stone-400">每类资产使用默认视图格式（角色=四宫格 / 场景=全景 / 道具=单物体 / 产品=主图），风格与平台统一应用</p>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">选择资产类型</p>
+                                <Checkbox.Group value={batchTypes} onChange={(v) => setBatchTypes(v as string[])} className="flex flex-col gap-1">
+                                    {(["character", "scene", "prop", "product"] as const).map((t) => (
+                                        <Checkbox key={t} value={t} disabled={typeItems(t).length === 0}>
+                                            {TYPE_LABEL[t]}（{typeItems(t).length} 项）
+                                        </Checkbox>
+                                    ))}
+                                </Checkbox.Group>
+                            </div>
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">画面风格</p>
+                                <Select size="small" className="w-full" value={batchStyle} onChange={setBatchStyle}
+                                    options={STYLE_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
+                                />
+                            </div>
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">目标平台</p>
+                                <Select size="small" className="w-full" value={batchPlatform} onChange={setBatchPlatform}
+                                    options={PLATFORM_LIST.map((p) => ({ value: p.id, label: `${p.label}${p.category === "video" ? "（视频）" : ""}` }))}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button size="small" onClick={() => setBatchOpen(false)}>取消</Button>
+                                <Button size="small" type="primary" icon={<Send className="size-3.5" />} disabled={batchTypes.length === 0} onClick={() => void doBatchSend()}>
+                                    批量导出
+                                </Button>
                             </div>
                         </div>
                     </div>
