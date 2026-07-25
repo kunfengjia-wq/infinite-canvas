@@ -55,10 +55,14 @@ const ASSET_EXTRACTOR_SYSTEM = `你是一位资深影视美术指导，精通广
 3. props（道具）：name, description(外观描述，含材质/颜色/尺寸感), significance(剧情意义), keywords(英文), keywordsZh(中文翻译)
 4. products（产品/品牌资产，广告片必填）：name, brand(品牌), appearance(产品外观：形态/颜色/材质/光泽), packaging(包装描述), significance(品牌意义/卖点), keywords(英文), keywordsZh(中文翻译)
 
-【资产隔离原则（极其重要）】
+【资产隔离原则（极其重要，双向隔离）】
 - 角色 ≠ 道具：角色手中/身上的物品（剑、包、伞、手机等）必须单独提取到 props，不得写入角色的 appearance/costume/keywords
 - 角色 ≠ 场景：角色 keywords 不得包含任何环境描述
 - 角色 ≠ 其他角色：每个角色独立描述，不得提及同伴
+- 道具 ≠ 人物：道具 keywords 不得包含手持/佩戴/使用的人物（如 hand holding, woman wearing）
+- 道具 ≠ 场景：道具必须是孤立物体，不得包含桌面/房间/户外等环境
+- 场景 ≠ 特定角色：场景 keywords 不得包含具体角色名或外貌描述（可含 "silhouette" 作为比例参考）
+- 产品 ≠ 人物：产品 keywords 不得包含模特/手/使用者
 
 【keywords 规范（极其重要）】
 keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔标签。同时 keywordsZh 提供对应中文翻译。
@@ -73,17 +77,19 @@ keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔�
   示例："character design sheet, front view, side view, back view, young woman, long straight black hair, emerald green eyes, oval face, slim figure, crimson silk cheongsam, gold hoop earrings, neutral T-pose, white background, reference sheet, concept art, ultra detailed"
   示例翻译："角色设计图, 正面视图, 侧面视图, 背面视图, 年轻女性, 黑色长直发, 翠绿色眼睛, 鹅蛋脸, 纤细身材, 深红色丝绸旗袍, 金色圈形耳环, 中性T字姿势, 白色背景, 参考图, 概念艺术, 超精细"
 
-■ 道具 keywords 格式（孤立物体，禁止带场景）：
+■ 道具 keywords 格式（孤立物体，禁止带场景/人物）：
   结构：[物体名], [材质/颜色/细节], isolated object, white background, studio lighting, product photography, close-up
-  禁止包含：任何环境、人物、场景
+  禁止包含：任何环境（桌面/房间/户外）、人物（hand, person, woman）、使用场景
   示例："antique bronze pocket watch, cracked glass face, roman numerals, tarnished chain, isolated object, white background, soft studio lighting, product photography, close-up, ultra detailed"
 
-■ 产品 keywords 格式（商业产品照）：
+■ 产品 keywords 格式（商业产品照，禁止带人物）：
   结构：[产品名], [外观/材质/颜色], [包装], clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial
+  禁止包含：模特、手、使用者（如 hand holding, model wearing, person using）
   示例："premium glass skincare bottle, frosted texture, gold metallic cap, minimalist label design, clean white background, studio softbox lighting, hero angle, product photography, 8k render, commercial quality"
 
-■ 场景 keywords 格式（唯一允许完整环境的类型）：
+■ 场景 keywords 格式（唯一允许完整环境的类型，禁止带特定角色）：
   结构：[室内/室外], [地点], [空间结构], [材质], [时间/光线], [氛围], wide angle, cinematic
+  禁止包含：具体角色名、外貌描述、特定人物（可用 "distant silhouette" 做比例参考）
   示例："interior, abandoned warehouse, high ceiling, rusty corrugated metal walls, broken skylight windows, volumetric sunlight beams, dust particles in air, concrete floor with cracks, cinematic lighting, wide angle, atmospheric, photorealistic"
 
 【其他专业要求】
@@ -118,9 +124,9 @@ export async function aiRegenerateAsset(config: AiConfig, script: string, assetT
         const typeLabel = { characters: "角色", locations: "场景/地点", props: "道具", products: "产品/品牌" }[assetType];
         const keywordRules: Record<string, string> = {
             characters: "keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, concept art' 结尾。禁止包含任何场景/环境。禁止包含手持道具、武器、其他角色、动物——角色必须是独立干净的纯角色设定图。",
-            locations: "keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 'wide angle, cinematic' 结尾。",
-            props: "keywords 必须是孤立物体：以物体名+材质/颜色开头，以 'isolated object, white background, studio lighting, product photography, close-up' 结尾。禁止包含环境/人物。",
-            products: "keywords 必须是商业产品照格式：以产品名+外观开头，以 'clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial' 结尾。",
+            locations: "keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 'wide angle, cinematic' 结尾。禁止包含具体角色名、外貌描述、特定人物（可用 distant silhouette 做比例参考）。",
+            props: "keywords 必须是孤立物体：以物体名+材质/颜色开头，以 'isolated object, white background, studio lighting, product photography, close-up' 结尾。禁止包含环境（桌面/房间/户外）、人物（hand, person, woman）、使用场景。",
+            products: "keywords 必须是商业产品照格式：以产品名+外观开头，以 'clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial' 结尾。禁止包含模特、手、使用者（hand holding, model wearing, person using）。",
         };
         const systemPrompt = `你是一位资深影视美术指导。用户会给你一段剧本和一个已有的${typeLabel}名称「${assetName}」，你需要重新为该${typeLabel}生成更详细、更专业的视觉描述。
 
