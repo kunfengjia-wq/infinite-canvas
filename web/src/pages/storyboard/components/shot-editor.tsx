@@ -10,7 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiGenerateShots, buildAssetsContext, buildProjectMetaContext } from "@/services/storyboard-ai";
 import { useCopyText } from "@/hooks/use-copy-text";
-import { SHOT_TYPES, CAMERA_ANGLES, CAMERA_MOVEMENTS, LENS_TYPES, LIGHTING_TYPES, TRANSITION_TYPES, toSelectOptions } from "@/data/cinematography";
+import { SHOT_TYPES, CAMERA_ANGLES, CAMERA_MOVEMENTS, LENS_TYPES, LIGHTING_TYPES, COMPOSITION_TYPES, TRANSITION_TYPES, toSelectOptions } from "@/data/cinematography";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Scene, Shot } from "@/types/storyboard";
 
@@ -20,6 +20,7 @@ const ANGLE_OPTIONS = toSelectOptions(CAMERA_ANGLES);
 const MOVEMENT_OPTIONS = toSelectOptions(CAMERA_MOVEMENTS);
 const LENS_OPTIONS = toSelectOptions(LENS_TYPES);
 const LIGHTING_OPTIONS = toSelectOptions(LIGHTING_TYPES);
+const COMPOSITION_OPTIONS = toSelectOptions(COMPOSITION_TYPES);
 const TRANSITION_OPTIONS = toSelectOptions(TRANSITION_TYPES);
 
 /** 将当前值动态加入选项列表（AI 可能输出数据库之外的自定义值） */
@@ -71,6 +72,7 @@ function SortableShotCard({ shot, sceneId }: { shot: Shot; sceneId: string }) {
                             <Select size="small" value={shot.cameraMovement || undefined} onChange={(v) => updateShot(sceneId, shot.id, { cameraMovement: v || undefined })} options={withCurrent(MOVEMENT_OPTIONS, shot.cameraMovement)} placeholder="运镜" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
                             <Select size="small" value={shot.lens || undefined} onChange={(v) => updateShot(sceneId, shot.id, { lens: v || undefined })} options={withCurrent(LENS_OPTIONS, shot.lens)} placeholder="焦距" allowClear showSearch className="!w-24" popupMatchSelectWidth={false} />
                             <Select size="small" value={shot.lighting || undefined} onChange={(v) => updateShot(sceneId, shot.id, { lighting: v || undefined })} options={withCurrent(LIGHTING_OPTIONS, shot.lighting)} placeholder="光线" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
+                            <Select size="small" value={shot.composition || undefined} onChange={(v) => updateShot(sceneId, shot.id, { composition: v || undefined })} options={withCurrent(COMPOSITION_OPTIONS, shot.composition)} placeholder="构图" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
                             <Select size="small" value={shot.transition || undefined} onChange={(v) => updateShot(sceneId, shot.id, { transition: v || undefined })} options={withCurrent(TRANSITION_OPTIONS, shot.transition)} placeholder="转场→" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
                         </div>
                         {/* 动作 + 对白 */}

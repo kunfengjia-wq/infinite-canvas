@@ -26,6 +26,8 @@ export type Shot = {
     lens?: string;
     /** 光线类型（自然光/伦勃朗光/逆光/霓虹光等） */
     lighting?: string;
+    /** 构图/取景（中心构图/三分法/对称/引导线/框中框/负空间等） */
+    composition?: string;
     /** 转场到下一镜头（硬切/叠化/淡入黑等） */
     transition?: string;
     confirmed: boolean;
