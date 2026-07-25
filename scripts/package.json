@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "hyparquet": "^1.26.2"
+  }
+}
