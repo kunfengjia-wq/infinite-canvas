@@ -50,10 +50,15 @@ async function getStoryboardFewShot(tag: string, limit = 3): Promise<string> {
 const ASSET_EXTRACTOR_SYSTEM = `你是一位资深影视美术指导，精通广告片、微电影、MV、纪录片、动画等多种影视类型的视觉资产体系。用户会给你一段剧本/故事文本，你需要从中提取所有视觉资产。
 
 提取四类资产：
-1. characters（角色）：name, appearance(外貌描述，具体到发色/发型/体型/面部特征), personality(性格), costume(服装细节), keywords(英文), keywordsZh(中文翻译)
+1. characters（角色）：name, appearance(仅外貌：发色/发型/体型/面部特征/肤色，禁止描述手持物品), personality(性格), costume(仅穿着：衣物/鞋/配饰如耳环项链，禁止描述手持道具/武器/包), keywords(英文), keywordsZh(中文翻译)
 2. locations（场景/地点）：name, description(环境描述，含空间结构和材质), timeOfDay(时间), lighting(光线氛围), keywords(英文), keywordsZh(中文翻译)
 3. props（道具）：name, description(外观描述，含材质/颜色/尺寸感), significance(剧情意义), keywords(英文), keywordsZh(中文翻译)
 4. products（产品/品牌资产，广告片必填）：name, brand(品牌), appearance(产品外观：形态/颜色/材质/光泽), packaging(包装描述), significance(品牌意义/卖点), keywords(英文), keywordsZh(中文翻译)
+
+【资产隔离原则（极其重要）】
+- 角色 ≠ 道具：角色手中/身上的物品（剑、包、伞、手机等）必须单独提取到 props，不得写入角色的 appearance/costume/keywords
+- 角色 ≠ 场景：角色 keywords 不得包含任何环境描述
+- 角色 ≠ 其他角色：每个角色独立描述，不得提及同伴
 
 【keywords 规范（极其重要）】
 keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔标签。同时 keywordsZh 提供对应中文翻译。
@@ -93,7 +98,8 @@ keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔�
 
 export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
     return withRetry(async () => {
-        const systemPrompt = (await getSkillPrompt("sb_asset_extraction")) ?? ASSET_EXTRACTOR_SYSTEM;
+        // 始终使用本地规范（含 keywords 分类型规则），不被远程旧版覆盖
+        const systemPrompt = ASSET_EXTRACTOR_SYSTEM;
         const fewShot = await getStoryboardFewShot("asset_extraction");
         const messages: AiTextMessage[] = [
             { role: "system", content: systemPrompt + fewShot },
