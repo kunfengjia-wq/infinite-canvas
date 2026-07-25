@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd";
+import { App, Button, Card, Empty, Input, Popconfirm, Popover, Radio, Select, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
@@ -8,7 +8,7 @@ import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiExtractAssets, aiRegenerateAsset } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
-import type { PromptCategory } from "@/types/prompt-studio";
+import { PLATFORM_LIST, type PromptCategory } from "@/types/prompt-studio";
 
 export function AssetExtraction({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
@@ -68,13 +68,47 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 
     const total = assets.characters.length + assets.locations.length + assets.props.length + assets.products.length;
 
-    /** 将资产关键词发送到提示词工作台 */
-    const sendToPromptStudio = async (name: string, keywords: string, category: PromptCategory) => {
-        if (!keywords.trim()) { message.warning("该资产没有关键词"); return; }
+    /** 将资产关键词发送到提示词工作台（带视图/平台选择） */
+    const [sendPanel, setSendPanel] = useState<{ name: string; keywords: string; category: PromptCategory } | null>(null);
+    const [sendFormat, setSendFormat] = useState("three-view");
+    const [sendPlatform, setSendPlatform] = useState("midjourney");
+
+    const FORMAT_OPTIONS: Record<string, { value: string; label: string; prefix: string }[]> = {
+        character: [
+            { value: "three-view", label: "三视图（正/侧/背）", prefix: "character design sheet, three views, front view, side view, back view," },
+            { value: "four-view", label: "四视图（正/侧/背/3/4）", prefix: "character turnaround sheet, four views, front view, side view, back view, three-quarter view," },
+            { value: "bust", label: "半身特写", prefix: "character portrait, bust shot, head and shoulders, detailed face," },
+            { value: "fullbody", label: "全身单张", prefix: "full body character concept art, single pose," },
+        ],
+        scene: [
+            { value: "wide", label: "全景（建立镜头）", prefix: "wide establishing shot, full environment," },
+            { value: "medium", label: "中景", prefix: "medium shot, partial environment," },
+            { value: "detail", label: "细节特写", prefix: "extreme close-up detail shot, texture focus," },
+        ],
+        prop: [
+            { value: "single", label: "单物体（白底）", prefix: "isolated object, white background, studio lighting, product photography," },
+            { value: "multi-angle", label: "多角度展示", prefix: "multiple angles showcase, front and side and top view, white background," },
+            { value: "in-context", label: "场景搭配", prefix: "in context, lifestyle setting," },
+        ],
+        product: [
+            { value: "hero", label: "主图（白底商业照）", prefix: "hero product shot, clean white background, studio softbox lighting, commercial," },
+            { value: "multi-angle", label: "多角度", prefix: "product multi-angle showcase, 360 degree views, white background," },
+            { value: "lifestyle", label: "场景生活化", prefix: "lifestyle product photography, natural setting, in use," },
+        ],
+    };
+
+    const doSend = async () => {
+        if (!sendPanel) return;
+        const { name, keywords, category } = sendPanel;
+        if (!keywords.trim()) { message.warning("该资产没有关键词"); setSendPanel(null); return; }
+        const options = FORMAT_OPTIONS[category] || FORMAT_OPTIONS.prop;
+        const fmt = options.find((o) => o.value === sendFormat);
+        const finalPrompt = fmt ? `${fmt.prefix} ${keywords}` : keywords;
         const store = usePromptStudioStore.getState();
         if (!store.current) await store.createProject(`分镜资产-${current.title}`);
-        usePromptStudioStore.getState().addEntry({ input: name, platform: "all", prompt: keywords, category });
-        message.success(`「${name}」关键词已发送到提示词工作台`);
+        usePromptStudioStore.getState().addEntry({ input: name, platform: sendPlatform, prompt: finalPrompt, category });
+        message.success(`「${name}」已发送到提示词工作台（${PLATFORM_LIST.find((p) => p.id === sendPlatform)?.label || sendPlatform}）`);
+        setSendPanel(null);
     };
 
     /** 重新生成单个资产 */
@@ -141,7 +175,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.characters}
                                 onAdd={() => setAssets({ ...assets, characters: [...assets.characters, { id: nanoid(), name: "新角色", appearance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, characters: assets.characters.filter((c) => c.id !== id) })}
-                                onSend={(c) => void sendToPromptStudio(c.name, c.keywords, "character")}
+                                onSend={(c) => { setSendFormat("three-view"); setSendPanel({ name: c.name, keywords: c.keywords, category: "character" }); }}
                                 onRegen={(c) => void regenerateOne(c.id, c.name, "characters")}
                                 regenId={regenId}
                                 render={(c: CharacterAsset) => (
@@ -166,7 +200,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.locations}
                                 onAdd={() => setAssets({ ...assets, locations: [...assets.locations, { id: nanoid(), name: "新场景", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, locations: assets.locations.filter((l) => l.id !== id) })}
-                                onSend={(l) => void sendToPromptStudio(l.name, l.keywords, "scene")}
+                                onSend={(l) => { setSendFormat("wide"); setSendPanel({ name: l.name, keywords: l.keywords, category: "scene" }); }}
                                 onRegen={(l) => void regenerateOne(l.id, l.name, "locations")}
                                 regenId={regenId}
                                 render={(l: LocationAsset) => (
@@ -193,7 +227,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.props}
                                 onAdd={() => setAssets({ ...assets, props: [...assets.props, { id: nanoid(), name: "新道具", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, props: assets.props.filter((p) => p.id !== id) })}
-                                onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "prop")}
+                                onSend={(p) => { setSendFormat("single"); setSendPanel({ name: p.name, keywords: p.keywords, category: "prop" }); }}
                                 onRegen={(p) => void regenerateOne(p.id, p.name, "props")}
                                 regenId={regenId}
                                 render={(p: PropAsset) => (
@@ -217,7 +251,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.products}
                                 onAdd={() => setAssets({ ...assets, products: [...assets.products, { id: nanoid(), name: "新产品", appearance: "", significance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, products: assets.products.filter((p) => p.id !== id) })}
-                                onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "product")}
+                                onSend={(p) => { setSendFormat("hero"); setSendPanel({ name: p.name, keywords: p.keywords, category: "product" }); }}
                                 onRegen={(p) => void regenerateOne(p.id, p.name, "products")}
                                 regenId={regenId}
                                 render={(p: ProductAsset) => (
@@ -236,6 +270,35 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                     },
                 ]}
             />
+
+            {/* 发送到提示词工作台 - 选择面板 */}
+            {sendPanel && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSendPanel(null)}>
+                    <div className="w-[380px] rounded-xl bg-white p-5 shadow-2xl dark:bg-stone-800" onClick={(e) => e.stopPropagation()}>
+                        <h4 className="mb-3 text-sm font-semibold">发送「{sendPanel.name}」到提示词工作台</h4>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">视图 / 格式</p>
+                                <Radio.Group size="small" value={sendFormat} onChange={(e) => setSendFormat(e.target.value)} className="flex flex-col gap-1">
+                                    {(FORMAT_OPTIONS[sendPanel.category] || FORMAT_OPTIONS.prop).map((o) => (
+                                        <Radio key={o.value} value={o.value}>{o.label}</Radio>
+                                    ))}
+                                </Radio.Group>
+                            </div>
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">目标平台</p>
+                                <Select size="small" className="w-full" value={sendPlatform} onChange={setSendPlatform}
+                                    options={PLATFORM_LIST.map((p) => ({ value: p.id, label: `${p.label}${p.category === "video" ? "（视频）" : ""}` }))}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button size="small" onClick={() => setSendPanel(null)}>取消</Button>
+                                <Button size="small" type="primary" icon={<Send className="size-3.5" />} onClick={() => void doSend()}>确认发送</Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
