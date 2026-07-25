@@ -77,8 +77,9 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
     /** 自然语言句式模板，{subject} 会被替换为 keywords */
     const FORMAT_OPTIONS: Record<string, { value: string; label: string; template: string }[]> = {
         character: [
-            { value: "three-view", label: "三视图（正/侧/背）", template: "Professional character reference sheet of {subject}. Displayed in three aligned views: front, side, and back. Neutral T-pose, clean pure white background, no props, no scene elements." },
-            { value: "four-view", label: "四视图（正/侧/背/3/4）", template: "Character turnaround model sheet of {subject}. Four aligned views: front, three-quarter, side, and back. Neutral standing pose, clean white background, production-ready reference." },
+            { value: "four-panel", label: "四宫格（面部+全身）", template: "Professional character model sheet of {subject}. Clean 2x2 four-panel layout on pure white background: Top-left panel (smaller): front-facing face close-up portrait showing full facial details. Top-right panel (smaller): side profile face close-up showing jawline and nose bridge. Bottom-left panel (larger): full body front view from head to toe, neutral standing pose. Bottom-right panel (larger): full body back view from neck down, showing hairstyle and costume from behind. No props, no scene elements, no other characters." },
+            { value: "three-view", label: "三视图（正/侧/背）", template: "Professional character reference sheet of {subject}. Displayed in three aligned full-body views: front, side, and back. Neutral T-pose, clean pure white background, no props, no scene elements." },
+            { value: "four-view", label: "四视图（正/侧/背/3/4）", template: "Character turnaround model sheet of {subject}. Four aligned full-body views: front, three-quarter, side, and back. Neutral standing pose, clean white background, production-ready reference." },
             { value: "bust", label: "半身特写", template: "Detailed character portrait bust shot of {subject}. Head and shoulders, facing camera, intricate facial details visible, clean neutral background." },
             { value: "fullbody", label: "全身单张", template: "Full body character concept art of {subject}. Single dynamic pose, entire figure visible head to toe, clean background, production quality." },
         ],
@@ -188,7 +189,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.characters}
                                 onAdd={() => setAssets({ ...assets, characters: [...assets.characters, { id: nanoid(), name: "新角色", appearance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, characters: assets.characters.filter((c) => c.id !== id) })}
-                                onSend={(c) => { setSendFormat("three-view"); setSendPanel({ name: c.name, keywords: c.keywords, category: "character" }); }}
+                                onSend={(c) => { setSendFormat("four-panel"); setSendPanel({ name: c.name, keywords: c.keywords, category: "character" }); }}
                                 onRegen={(c) => void regenerateOne(c.id, c.name, "characters")}
                                 regenId={regenId}
                                 render={(c: CharacterAsset) => (
