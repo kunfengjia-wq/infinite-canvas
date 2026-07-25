@@ -51,7 +51,8 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
                 r.shotType.includes(q) ||
                 r.angle.includes(q) ||
                 (r.cameraMovement || "").includes(q) ||
-                (r.lighting || "").includes(q),
+                (r.lighting || "").includes(q) ||
+                (r.composition || "").includes(q),
         );
     }, [allRows, search]);
 
@@ -65,18 +66,18 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
     if (!current || allRows.length === 0) return null;
 
     const handleCopyTable = () => {
-        const header = "序号\t场景\t景别\t角度\t运镜\t光线\t动作\t对白\t时长\t画面描述";
+        const header = "序号\t场景\t景别\t角度\t运镜\t光线\t构图\t动作\t对白\t时长\t画面描述";
         const body = rows.map((r, i) =>
-            [i + 1, r.sceneTitle, r.shotType, r.angle, r.cameraMovement || "", r.lighting || "", r.action, r.dialogue || "", r.duration || "", r.visualDescription].join("\t"),
+            [i + 1, r.sceneTitle, r.shotType, r.angle, r.cameraMovement || "", r.lighting || "", r.composition || "", r.action, r.dialogue || "", r.duration || "", r.visualDescription].join("\t"),
         );
         copyText([header, ...body].join("\n"), "分镜表已复制（可粘贴到 Excel）");
     };
 
     const handleExportCsv = () => {
         const BOM = "\uFEFF";
-        const header = "序号,场景,景别,角度,运镜,焦距,光线,转场,动作,对白,时长,画面描述";
+        const header = "序号,场景,景别,角度,运镜,焦距,光线,构图,转场,动作,对白,时长,画面描述";
         const body = rows.map((r, i) =>
-            [i + 1, `"${r.sceneTitle}"`, r.shotType, r.angle, r.cameraMovement || "", r.lens || "", r.lighting || "", r.transition || "", `"${r.action.replace(/"/g, '""')}"`, `"${(r.dialogue || "").replace(/"/g, '""')}"`, r.duration || "", `"${r.visualDescription.replace(/"/g, '""')}"`].join(","),
+            [i + 1, `"${r.sceneTitle}"`, r.shotType, r.angle, r.cameraMovement || "", r.lens || "", r.lighting || "", r.composition || "", r.transition || "", `"${r.action.replace(/"/g, '""')}"`, `"${(r.dialogue || "").replace(/"/g, '""')}"`, r.duration || "", `"${r.visualDescription.replace(/"/g, '""')}"`].join(","),
         );
         const blob = new Blob([BOM + [header, ...body].join("\n")], { type: "text/csv;charset=utf-8" });
         saveAs(blob, `${current.title || "分镜表"}.csv`);
@@ -90,11 +91,11 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
         doc.text(current.title || "Storyboard", 14, 15);
         autoTable(doc, {
             startY: 20,
-            head: [["#", "Scene", "Shot", "Angle", "Camera", "Lighting", "Action", "Dialogue", "Duration", "Description"]],
-            body: rows.map((r, i) => [i + 1, r.sceneTitle, r.shotType, r.angle, r.cameraMovement || "", r.lighting || "", r.action, r.dialogue || "", r.duration || "", r.visualDescription]),
+            head: [["#", "Scene", "Shot", "Angle", "Camera", "Lighting", "Composition", "Action", "Dialogue", "Duration", "Description"]],
+            body: rows.map((r, i) => [i + 1, r.sceneTitle, r.shotType, r.angle, r.cameraMovement || "", r.lighting || "", r.composition || "", r.action, r.dialogue || "", r.duration || "", r.visualDescription]),
             styles: { fontSize: 7, cellPadding: 2 },
             headStyles: { fillColor: [59, 130, 246] },
-            columnStyles: { 6: { cellWidth: 45 }, 9: { cellWidth: 55 } },
+            columnStyles: { 7: { cellWidth: 45 }, 10: { cellWidth: 55 } },
         });
         doc.save(`${current.title || "storyboard"}.pdf`);
     };
@@ -114,13 +115,14 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
         { title: "场景", dataIndex: "sceneTitle", width: 90, render: (v: string) => <span className="whitespace-normal break-all text-xs text-stone-500">{v}</span> },
         { title: "景别", dataIndex: "shotType", width: 58, render: (v: string) => <Tag className="m-0 scale-90">{v}</Tag> },
         { title: "角度", dataIndex: "angle", width: 58, render: (v: string) => <Tag className="m-0 scale-90" color="geekblue">{v}</Tag> },
-        { title: "镜头语言", key: "cinematography", width: 110, render: (_, row) => (
+        { title: "镜头语言", key: "cinematography", width: 130, render: (_, row) => (
             <div className="flex flex-wrap gap-0.5">
                 {row.cameraMovement && <Tag className="m-0 scale-90" color="cyan">{row.cameraMovement}</Tag>}
                 {row.lens && <Tag className="m-0 scale-90" color="green">{row.lens}</Tag>}
                 {row.lighting && <Tag className="m-0 scale-90" color="gold">{row.lighting}</Tag>}
+                {row.composition && <Tag className="m-0 scale-90" color="purple">{row.composition}</Tag>}
                 {row.transition && <Tag className="m-0 scale-90" color="volcano">→{row.transition}</Tag>}
-                {!row.cameraMovement && !row.lens && !row.lighting && !row.transition && <span className="text-xs text-stone-300">-</span>}
+                {!row.cameraMovement && !row.lens && !row.lighting && !row.composition && !row.transition && <span className="text-xs text-stone-300">-</span>}
             </div>
         )},
         { title: "动作", dataIndex: "action", width: 200, render: (v: string, row) => (
