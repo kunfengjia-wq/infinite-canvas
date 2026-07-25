@@ -56,7 +56,7 @@ export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: 
 
 // ─── Skill: 镜头生成 ─────────────────────────────────────────────
 
-const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你一个场景的描述，你需要为该场景设计具体的镜头列表。
+const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你一个场景的描述和相关资产信息，你需要为该场景设计具体的镜头列表。
 
 每个镜头包含：
 - shotType: 景别（远景/全景/中景/近景/特写/大特写）
@@ -70,14 +70,22 @@ const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你�
 1. 每个场景一般3-8个镜头
 2. 注意景别和角度的变化节奏（不要全是中景平视）
 3. action 描述要具体可视化，像在给摄影师下指令
+4. 结合角色资产信息，确保动作描述与角色外貌/性格一致
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
 [{"shotType":"中景","angle":"平视","action":"主角推开门走进教室","dialogue":"","duration":"3s","mood":"紧张"}]`;
 
-export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
+export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
+    const userContent = [
+        `场景：${sceneTitle}`,
+        `概要：${sceneSummary}`,
+        assetsContext ? `\n相关资产：\n${assetsContext}` : "",
+        `\n相关剧本片段：\n${script}`,
+        "\n请为该场景设计镜头列表：",
+    ].join("\n");
     const messages: AiTextMessage[] = [
         { role: "system", content: SHOT_GENERATOR_SYSTEM },
-        { role: "user", content: `场景：${sceneTitle}\n概要：${sceneSummary}\n\n相关剧本片段：\n${script}\n\n请为该场景设计镜头列表：` },
+        { role: "user", content: userContent },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
     return parseJsonArray<AiShotResult>(raw);
@@ -85,27 +93,55 @@ export async function aiGenerateShots(config: AiConfig, sceneTitle: string, scen
 
 // ─── Skill: 画面描述生成 ─────────────────────────────────────────
 
-const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述专家。用户会给你一个镜头的基本信息（景别、角度、动作、氛围），你需要生成一段详细的画面视觉描述。
+const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述专家。用户会给你一个镜头的基本信息（景别、角度、动作、氛围）以及该项目的角色/场景/道具资产描述，你需要生成一段详细的画面视觉描述。
 
 要求：
 1. 描述要像一段画面说明，涵盖：主体、环境、光线、色彩、构图、材质
-2. 语言精炼但信息密度高，适合作为 AI 生图的输入
-3. 80-150字为佳
-4. 直接输出描述文本，不要加引号或前缀`;
+2. 必须结合资产信息中的角色外貌、场景环境、道具外观来描述，确保视觉一致性
+3. 语言精炼但信息密度高，适合作为 AI 生图的输入
+4. 80-150字为佳
+5. 直接输出描述文本，不要加引号或前缀`;
 
-export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string }, sceneContext: string, onDelta?: (text: string) => void): Promise<string> {
+export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
+    const userContent = [
+        `场景背景：${sceneContext}`,
+        assetsContext ? `\n项目资产（角色/场景/道具）：\n${assetsContext}` : "",
+        `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
+        "\n请生成画面视觉描述：",
+    ].join("\n");
     const messages: AiTextMessage[] = [
         { role: "system", content: VISUAL_DESCRIPTOR_SYSTEM },
-        {
-            role: "user",
-            content: `场景背景：${sceneContext}\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}\n\n请生成画面视觉描述：`,
-        },
+        { role: "user", content: userContent },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
     return raw.trim();
 }
 
 // ─── 工具函数 ────────────────────────────────────────────────────
+
+/** 将 StoryAssets 构建为传递给 AI 的上下文字符串 */
+export function buildAssetsContext(assets: StoryAssets): string {
+    const parts: string[] = [];
+    if (assets.characters.length) {
+        parts.push("【角色】");
+        assets.characters.forEach((c) => {
+            parts.push(`- ${c.name}：${c.appearance}${c.costume ? `，服装：${c.costume}` : ""}${c.keywords ? ` [关键词: ${c.keywords}]` : ""}`);
+        });
+    }
+    if (assets.locations.length) {
+        parts.push("【场景】");
+        assets.locations.forEach((l) => {
+            parts.push(`- ${l.name}：${l.description}${l.timeOfDay ? `，时间：${l.timeOfDay}` : ""}${l.lighting ? `，光线：${l.lighting}` : ""}${l.keywords ? ` [关键词: ${l.keywords}]` : ""}`);
+        });
+    }
+    if (assets.props.length) {
+        parts.push("【道具】");
+        assets.props.forEach((p) => {
+            parts.push(`- ${p.name}：${p.description}${p.significance ? `（${p.significance}）` : ""}${p.keywords ? ` [关键词: ${p.keywords}]` : ""}`);
+        });
+    }
+    return parts.join("\n");
+}
 
 function parseJsonArray<T>(raw: string): T[] {
     // 尝试从 AI 输出中提取 JSON 数组

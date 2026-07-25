@@ -4,7 +4,7 @@ import { App, Button, Card, Input, Progress, Tag } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
-import { aiGenerateVisualDescription } from "@/services/storyboard-ai";
+import { aiGenerateVisualDescription, buildAssetsContext } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 
 export function DescriptionReview({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
@@ -23,6 +23,7 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
     const handleBatchGenerate = async () => {
         setProcessing(true);
         setProgress({ done: 0, total: totalShots });
+        const assetsCtx = buildAssetsContext(current.assets) || undefined;
         try {
             let done = 0;
             for (const { scene, shot } of allShots) {
@@ -31,7 +32,7 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
                     setProgress({ done, total: totalShots });
                     continue;
                 }
-                const desc = await aiGenerateVisualDescription(config, shot, `${scene.title} - ${scene.summary}`);
+                const desc = await aiGenerateVisualDescription(config, shot, `${scene.title} - ${scene.summary}`, assetsCtx);
                 updateShotDescription(scene.id, shot.id, desc);
                 done++;
                 setProgress({ done, total: totalShots });
@@ -53,7 +54,8 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
     const handleRegenerateShot = async (sceneId: string, sceneTitle: string, sceneSummary: string, shot: { id: string; shotType: string; angle: string; action: string; mood?: string; dialogue?: string }) => {
         setRegeneratingShot(shot.id);
         try {
-            const desc = await aiGenerateVisualDescription(config, shot, `${sceneTitle} - ${sceneSummary}`);
+            const assetsCtx = buildAssetsContext(current.assets) || undefined;
+            const desc = await aiGenerateVisualDescription(config, shot, `${sceneTitle} - ${sceneSummary}`, assetsCtx);
             updateShotDescription(sceneId, shot.id, desc);
             message.success("已重新生成");
         } catch (error) {

@@ -4,7 +4,7 @@ import { App, Button, Card, Collapse, Input, Popconfirm, Select, Tag } from "ant
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
-import { aiGenerateShots } from "@/services/storyboard-ai";
+import { aiGenerateShots, buildAssetsContext } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Scene, Shot } from "@/types/storyboard";
 
@@ -23,7 +23,8 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
         setGeneratingScene(scene.id);
         setProcessing(true);
         try {
-            const results = await aiGenerateShots(config, scene.title, scene.summary, current.script);
+            const assetsCtx = buildAssetsContext(current.assets);
+            const results = await aiGenerateShots(config, scene.title, scene.summary, current.script, assetsCtx || undefined);
             const shots: Shot[] = results.map((r, i) => ({
                 id: nanoid(),
                 index: i,
