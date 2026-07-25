@@ -100,7 +100,7 @@ const SHOT_GENERATOR_SYSTEM = `你是一位顶级分镜师/摄影指导，精通
 8. 结合角色资产确保动作与角色外貌/性格一致
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
-[{"shotType":"全景","angle":"平视","cameraMovement":"斯坦尼康","lens":"广角","lighting":"自然光","transition":"硬切","action":"主角推开门走进教室，阳光从走廊洒入","dialogue":"老师：这次考试成绩出来了","duration":"4s","mood":"紧张"}]`;
+[{"shotType":"全景","angle":"平视","cameraMovement":"斯坦尼康","lens":"广角","lighting":"自然光","composition":"引导线","transition":"硬切","action":"主角推开门走进教室，阳光从走廊洒入","dialogue":"老师：这次考试成绩出来了","duration":"4s","mood":"紧张"}]`;
 
 export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, projectMeta?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
     return withRetry(async () => {
@@ -136,12 +136,12 @@ const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述大师，精通摄影�
 7. 100-200字，信息密度高，每句话都有视觉价值，适合作为 AI 生图/生视频输入
 8. 直接输出描述文本，不要加引号或前缀`;
 
-export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
+export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string; composition?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
     const systemPrompt = (await getSkillPrompt("sb_visual_description")) ?? VISUAL_DESCRIPTOR_SYSTEM;
     const userContent = [
         `场景背景：${sceneContext}`,
         assetsContext ? `\n项目资产（角色/场景/道具）：\n${assetsContext}` : "",
-        `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.cameraMovement ? `，运镜=${shot.cameraMovement}` : ""}${shot.lens ? `，镜头=${shot.lens}` : ""}${shot.lighting ? `，光线=${shot.lighting}` : ""}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
+        `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.cameraMovement ? `，运镜=${shot.cameraMovement}` : ""}${shot.lens ? `，镜头=${shot.lens}` : ""}${shot.lighting ? `，光线=${shot.lighting}` : ""}${shot.composition ? `，构图=${shot.composition}` : ""}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
         "\n请生成画面视觉描述：",
     ].join("\n");
     const messages: AiTextMessage[] = [

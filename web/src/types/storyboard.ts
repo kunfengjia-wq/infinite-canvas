@@ -139,6 +139,7 @@ export type AiShotResult = {
     cameraMovement?: string;
     lens?: string;
     lighting?: string;
+    composition?: string;
     transition?: string;
 };
 

@@ -159,6 +159,7 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
                 cameraMovement: r.cameraMovement || undefined,
                 lens: r.lens || undefined,
                 lighting: r.lighting || undefined,
+                composition: r.composition || undefined,
                 transition: r.transition || undefined,
                 visualDescription: "",
                 confirmed: false,
