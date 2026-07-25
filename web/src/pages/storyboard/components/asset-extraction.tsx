@@ -151,6 +151,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                         <Input.TextArea size="small" rows={2} value={c.appearance} onChange={(e) => updateCharacter(c.id, { appearance: e.target.value })} placeholder="外貌描述（发色、体型、特征...）" className="sm:col-span-2" />
                                         <Input size="small" value={c.personality || ""} onChange={(e) => updateCharacter(c.id, { personality: e.target.value || undefined })} placeholder="性格" addonBefore="性格" />
                                         <Input size="small" value={c.keywords} onChange={(e) => updateCharacter(c.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" />
+                                        {c.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{c.keywordsZh}</p>}
                                     </div>
                                 )}
                             />
@@ -177,6 +178,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                         </div>
                                         <Input.TextArea size="small" rows={2} value={l.description} onChange={(e) => updateLocation(l.id, { description: e.target.value })} placeholder="环境描述" className="sm:col-span-2" />
                                         <Input size="small" value={l.keywords} onChange={(e) => updateLocation(l.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
+                                        {l.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{l.keywordsZh}</p>}
                                     </div>
                                 )}
                             />
@@ -200,6 +202,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                         <Input size="small" value={p.significance || ""} onChange={(e) => updateProp(p.id, { significance: e.target.value || undefined })} placeholder="剧情意义" addonBefore="意义" />
                                         <Input.TextArea size="small" rows={2} value={p.description} onChange={(e) => updateProp(p.id, { description: e.target.value })} placeholder="外观描述" className="sm:col-span-2" />
                                         <Input size="small" value={p.keywords} onChange={(e) => updateProp(p.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
+                                        {p.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{p.keywordsZh}</p>}
                                     </div>
                                 )}
                             />
@@ -225,6 +228,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                         <Input size="small" value={p.packaging || ""} onChange={(e) => updateProduct(p.id, { packaging: e.target.value || undefined })} placeholder="包装描述" addonBefore="包装" />
                                         <Input size="small" value={p.significance} onChange={(e) => updateProduct(p.id, { significance: e.target.value })} placeholder="品牌意义" addonBefore="意义" />
                                         <Input size="small" value={p.keywords} onChange={(e) => updateProduct(p.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
+                                        {p.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{p.keywordsZh}</p>}
                                     </div>
                                 )}
                             />

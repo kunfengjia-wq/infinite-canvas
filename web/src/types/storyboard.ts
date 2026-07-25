@@ -58,6 +58,8 @@ export type CharacterAsset = {
     personality?: string;
     costume?: string;
     keywords: string;
+    /** keywords 的中文翻译（便于用户理解） */
+    keywordsZh?: string;
 };
 
 /** 场景/地点资产 */
@@ -68,6 +70,7 @@ export type LocationAsset = {
     timeOfDay?: string;
     lighting?: string;
     keywords: string;
+    keywordsZh?: string;
 };
 
 /** 道具资产 */
@@ -77,6 +80,7 @@ export type PropAsset = {
     description: string;
     significance?: string;
     keywords: string;
+    keywordsZh?: string;
 };
 
 /** 产品/品牌资产（广告片核心） */
@@ -88,6 +92,7 @@ export type ProductAsset = {
     packaging?: string;
     significance: string;
     keywords: string;
+    keywordsZh?: string;
 };
 
 /** 资产提取结果 */

@@ -50,17 +50,40 @@ async function getStoryboardFewShot(tag: string, limit = 3): Promise<string> {
 const ASSET_EXTRACTOR_SYSTEM = `你是一位资深影视美术指导，精通广告片、微电影、MV、纪录片、动画等多种影视类型的视觉资产体系。用户会给你一段剧本/故事文本，你需要从中提取所有视觉资产。
 
 提取四类资产：
-1. characters（角色）：name, appearance(外貌描述，具体到发色/发型/体型/面部特征), personality(性格), costume(服装细节), keywords(英文AI生图关键词)
-2. locations（场景/地点）：name, description(环境描述，含空间结构和材质), timeOfDay(时间), lighting(光线氛围), keywords(英文关键词)
-3. props（道具）：name, description(外观描述，含材质/颜色/尺寸感), significance(剧情意义), keywords(英文关键词)
-4. products（产品/品牌资产，广告片必填）：name, brand(品牌), appearance(产品外观：形态/颜色/材质/光泽), packaging(包装描述), significance(品牌意义/卖点), keywords(英文关键词)
+1. characters（角色）：name, appearance(外貌描述，具体到发色/发型/体型/面部特征), personality(性格), costume(服装细节), keywords(英文), keywordsZh(中文翻译)
+2. locations（场景/地点）：name, description(环境描述，含空间结构和材质), timeOfDay(时间), lighting(光线氛围), keywords(英文), keywordsZh(中文翻译)
+3. props（道具）：name, description(外观描述，含材质/颜色/尺寸感), significance(剧情意义), keywords(英文), keywordsZh(中文翻译)
+4. products（产品/品牌资产，广告片必填）：name, brand(品牌), appearance(产品外观：形态/颜色/材质/光泽), packaging(包装描述), significance(品牌意义/卖点), keywords(英文), keywordsZh(中文翻译)
 
-专业要求：
-1. keywords 用英文逗号分隔，适合作为 AI 生图提示词（如 "young woman, long black hair, red dress, confident pose"）
-2. 角色外貌必须具体可视化，禁止"长得很帅"等模糊描述
-3. 广告类剧本必须提取 products（产品外观、包装、品牌调性）
-4. 场景描述需包含光线方向/色温信息（如"暖黄夕照从左侧45°射入"）
-5. 道具需注明材质（金属/木质/玻璃/织物等）
+【keywords 规范（极其重要）】
+keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔标签。同时 keywordsZh 提供对应中文翻译。
+
+■ 角色 keywords 格式（三视图/参考图，禁止带场景）：
+  结构：character design sheet, [视图], [主体描述], [外貌细节], [服装], [姿势], white background, reference sheet, concept art
+  必须包含：character design sheet / turnaround / front view, side view, back view / T-pose / white background / clean background
+  禁止包含：任何场景、环境、背景描述（如 in a room, forest, city）
+  示例："character design sheet, front view, side view, back view, young woman, long straight black hair, emerald green eyes, oval face, slim figure, crimson silk cheongsam, gold hoop earrings, neutral T-pose, white background, reference sheet, concept art, ultra detailed"
+  示例翻译："角色设计图, 正面视图, 侧面视图, 背面视图, 年轻女性, 黑色长直发, 翠绿色眼睛, 鹅蛋脸, 纤细身材, 深红色丝绸旗袍, 金色圈形耳环, 中性T字姿势, 白色背景, 参考图, 概念艺术, 超精细"
+
+■ 道具 keywords 格式（孤立物体，禁止带场景）：
+  结构：[物体名], [材质/颜色/细节], isolated object, white background, studio lighting, product photography, close-up
+  禁止包含：任何环境、人物、场景
+  示例："antique bronze pocket watch, cracked glass face, roman numerals, tarnished chain, isolated object, white background, soft studio lighting, product photography, close-up, ultra detailed"
+
+■ 产品 keywords 格式（商业产品照）：
+  结构：[产品名], [外观/材质/颜色], [包装], clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial
+  示例："premium glass skincare bottle, frosted texture, gold metallic cap, minimalist label design, clean white background, studio softbox lighting, hero angle, product photography, 8k render, commercial quality"
+
+■ 场景 keywords 格式（唯一允许完整环境的类型）：
+  结构：[室内/室外], [地点], [空间结构], [材质], [时间/光线], [氛围], wide angle, cinematic
+  示例："interior, abandoned warehouse, high ceiling, rusty corrugated metal walls, broken skylight windows, volumetric sunlight beams, dust particles in air, concrete floor with cracks, cinematic lighting, wide angle, atmospheric, photorealistic"
+
+【其他专业要求】
+1. 角色外貌必须具体可视化，禁止"长得很帅""非常漂亮"等模糊描述
+2. 广告类剧本必须提取 products（产品外观、包装、品牌调性）
+3. 场景描述需包含光线方向/色温信息
+4. 道具需注明材质（金属/木质/玻璃/织物等）
+5. keywordsZh 是 keywords 的逐条中文翻译，用逗号分隔，方便用户理解
 
 严格以 JSON 格式输出，不要输出任何其他文字：
 {"characters":[...],"locations":[...],"props":[...],"products":[...]}`;
@@ -84,13 +107,20 @@ export async function aiExtractAssets(config: AiConfig, script: string, onDelta?
 export async function aiRegenerateAsset(config: AiConfig, script: string, assetType: "characters" | "locations" | "props" | "products", assetName: string, onDelta?: (text: string) => void): Promise<Record<string, unknown>> {
     return withRetry(async () => {
         const typeLabel = { characters: "角色", locations: "场景/地点", props: "道具", products: "产品/品牌" }[assetType];
+        const keywordRules: Record<string, string> = {
+            characters: "keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, concept art' 结尾。禁止包含任何场景/环境。",
+            locations: "keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 'wide angle, cinematic' 结尾。",
+            props: "keywords 必须是孤立物体：以物体名+材质/颜色开头，以 'isolated object, white background, studio lighting, product photography, close-up' 结尾。禁止包含环境/人物。",
+            products: "keywords 必须是商业产品照格式：以产品名+外观开头，以 'clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial' 结尾。",
+        };
         const systemPrompt = `你是一位资深影视美术指导。用户会给你一段剧本和一个已有的${typeLabel}名称「${assetName}」，你需要重新为该${typeLabel}生成更详细、更专业的视觉描述。
 
 输出要求：
 1. 仅输出该单个${typeLabel}的 JSON 对象（不要数组）
 2. 字段与原来一致，但描述要更具体、更可视化
-3. keywords 用英文逗号分隔，适合作为 AI 生图提示词
-4. 严格以 JSON 格式输出，不要输出任何其他文字`;
+3. ${keywordRules[assetType]}
+4. keywords 纯英文逗号分隔标签，keywordsZh 提供逐条中文翻译
+5. 严格以 JSON 格式输出，不要输出任何其他文字`;
         const messages: AiTextMessage[] = [
             { role: "system", content: systemPrompt },
             { role: "user", content: `剧本：\n${script}\n\n请重新生成${typeLabel}「${assetName}」的详细视觉描述：` },
