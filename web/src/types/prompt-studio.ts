@@ -1,0 +1,140 @@
+/**
+ * 提示词工作台 - 数据模型
+ */
+
+/** 提示词分类 */
+export type PromptCategory = "character" | "scene" | "prop" | "product" | "action" | "mood" | "camera" | "style" | "general";
+
+/** 分类元信息 */
+export const PROMPT_CATEGORIES: { id: PromptCategory; label: string; color: string }[] = [
+    { id: "character", label: "角色", color: "magenta" },
+    { id: "scene", label: "场景", color: "blue" },
+    { id: "prop", label: "道具", color: "orange" },
+    { id: "product", label: "产品", color: "gold" },
+    { id: "action", label: "动作", color: "green" },
+    { id: "mood", label: "氛围", color: "purple" },
+    { id: "camera", label: "镜头", color: "cyan" },
+    { id: "style", label: "风格", color: "volcano" },
+    { id: "general", label: "通用", color: "default" },
+];
+
+/** 平台分类 */
+export type PlatformCategory = "image" | "video";
+
+/** 平台信息 */
+export type PlatformMeta = {
+    id: string;
+    label: string;
+    category: PlatformCategory;
+    description: string;
+    supportsNegative?: boolean;
+    maxLength?: number;
+};
+
+/** 支持的平台列表 */
+export const PLATFORM_LIST: PlatformMeta[] = [
+    // 图片平台
+    { id: "midjourney", label: "Midjourney", category: "image", description: "艺术感强，适合概念设计和风格化图像", supportsNegative: false, maxLength: 600 },
+    { id: "stable-diffusion", label: "Stable Diffusion", category: "image", description: "开源可控，支持标签式提示词和负面提示词", supportsNegative: true, maxLength: 500 },
+    { id: "dall-e", label: "DALL-E 3", category: "image", description: "自然语言描述，理解力强", supportsNegative: false, maxLength: 400 },
+    { id: "flux", label: "Flux", category: "image", description: "高质量开源模型，细节丰富", supportsNegative: true, maxLength: 500 },
+    { id: "ideogram", label: "Ideogram", category: "image", description: "文字渲染能力强，适合海报设计", supportsNegative: false, maxLength: 400 },
+    { id: "leonardo", label: "Leonardo AI", category: "image", description: "游戏资产和概念设计", supportsNegative: true, maxLength: 500 },
+    { id: "gpt-image", label: "GPT Image", category: "image", description: "OpenAI 最新图像生成", supportsNegative: false, maxLength: 400 },
+    { id: "wanx", label: "通义万相", category: "image", description: "阿里通义，中文理解好", supportsNegative: true, maxLength: 500 },
+    // 视频平台
+    { id: "kling", label: "可灵 Kling", category: "video", description: "快手视频生成，运动控制好", supportsNegative: false, maxLength: 300 },
+    { id: "runway", label: "Runway Gen-3", category: "video", description: "专业视频生成，镜头语言丰富", supportsNegative: false, maxLength: 300 },
+    { id: "pika", label: "Pika", category: "video", description: "轻量视频生成，适合短片段", supportsNegative: false, maxLength: 200 },
+    { id: "sora", label: "Sora", category: "video", description: "OpenAI 视频生成，电影级质量", supportsNegative: false, maxLength: 400 },
+    { id: "veo", label: "Google Veo", category: "video", description: "Google 视频生成，物理真实感强", supportsNegative: false, maxLength: 300 },
+    { id: "hailuo", label: "海螺 Hailuo", category: "video", description: "MiniMax 视频生成", supportsNegative: false, maxLength: 300 },
+    { id: "vidu", label: "Vidu", category: "video", description: "生数科技视频生成", supportsNegative: false, maxLength: 300 },
+    { id: "luma", label: "Luma", category: "video", description: "3D 理解能力强", supportsNegative: false, maxLength: 300 },
+    { id: "seedance", label: "Seedance", category: "video", description: "舞蹈/动作视频生成", supportsNegative: false, maxLength: 300 },
+];
+
+/** 提示词平台类型（联合类型） */
+export type PromptPlatform = (typeof PLATFORM_LIST)[number]["id"];
+
+/** 风格预设 */
+export type StylePreset = {
+    id: string;
+    label: string;
+    keywords: string;
+    category: string;
+};
+
+/** 扩展风格预设（30+，覆盖写实/动画/艺术流派/文化/科幻/现代设计） */
+export const STYLE_PRESETS: StylePreset[] = [
+    // 写实类
+    { id: "cinematic_realism", label: "电影写实", keywords: "cinematic, film grain, anamorphic lens, dramatic lighting, shallow depth of field, color graded", category: "写实类" },
+    { id: "documentary_style", label: "纪录片", keywords: "documentary, handheld camera, natural light, raw footage, observational, vérité", category: "写实类" },
+    { id: "commercial_photo", label: "商业广告", keywords: "commercial quality, product shot, studio lighting, premium, clean background, high-end", category: "写实类" },
+    { id: "film_stock", label: "胶片质感", keywords: "film photography, 35mm, kodak portra, fujifilm, grain, warm tones, analog", category: "写实类" },
+    { id: "fashion_editorial", label: "时尚大片", keywords: "fashion photography, editorial, haute couture, dramatic pose, magazine cover, high fashion", category: "写实类" },
+    // 动画类
+    { id: "anime", label: "日系动漫", keywords: "anime style, cel shading, vibrant colors, detailed eyes, clean lines, manga inspired", category: "动画类" },
+    { id: "western_comics", label: "美漫", keywords: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel", category: "动画类" },
+    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing", category: "动画类" },
+    { id: "stop_motion", label: "定格动画", keywords: "stop motion, claymation, miniature, handcrafted, tactile, laika studios", category: "动画类" },
+    { id: "ink_animation", label: "水墨动画", keywords: "chinese ink animation, brush strokes, flowing ink, traditional animation, ethereal movement", category: "动画类" },
+    { id: "pixel_art", label: "像素艺术", keywords: "pixel art, 8-bit, 16-bit, retro game, sprite, nostalgic gaming", category: "动画类" },
+    // 艺术流派
+    { id: "impressionism", label: "印象派", keywords: "impressionist painting, visible brushstrokes, light and color, monet, renoir, plein air", category: "艺术流派" },
+    { id: "expressionism", label: "表现主义", keywords: "expressionist, distorted forms, bold colors, emotional intensity, edvard munch", category: "艺术流派" },
+    { id: "surrealism", label: "超现实主义", keywords: "surrealist, dreamlike, impossible scenes, dali, magritte, subconscious", category: "艺术流派" },
+    { id: "pop_art", label: "波普艺术", keywords: "pop art, andy warhol, bold colors, comic style, repetition, consumer culture", category: "艺术流派" },
+    { id: "rococo", label: "洛可可", keywords: "rococo, ornate, pastel colors, gold leaf, decorative, 18th century, fragonard", category: "艺术流派" },
+    { id: "baroque", label: "巴洛克", keywords: "baroque, dramatic lighting, rich colors, grandeur, caravaggio, chiaroscuro", category: "艺术流派" },
+    { id: "art_nouveau", label: "新艺术运动", keywords: "art nouveau, organic curves, floral motifs, alphonse mucha, flowing lines", category: "艺术流派" },
+    { id: "art_deco", label: "装饰艺术", keywords: "art deco, geometric patterns, gold and black, 1920s, gatsby, symmetrical, luxury", category: "艺术流派" },
+    // 文化风格
+    { id: "chinese_ink", label: "中国水墨", keywords: "chinese ink painting, shan shui, brush and ink, rice paper, negative space, zen minimalism", category: "文化风格" },
+    { id: "gongbi", label: "工笔重彩", keywords: "gongbi painting, fine brushwork, rich colors, detailed, chinese traditional, silk painting", category: "文化风格" },
+    { id: "dunhuang", label: "敦煌壁画", keywords: "dunhuang murals, buddhist art, flying apsaras, mineral pigments, ancient chinese", category: "文化风格" },
+    { id: "ukiyo_e", label: "浮世绘", keywords: "ukiyo-e, japanese woodblock print, hokusai, flat colors, bold outlines", category: "文化风格" },
+    { id: "persian_miniature", label: "波斯细密画", keywords: "persian miniature, intricate detail, flat perspective, gold illumination, islamic art", category: "文化风格" },
+    // 科幻/奇幻
+    { id: "cyberpunk", label: "赛博朋克", keywords: "cyberpunk, neon lights, rain-soaked streets, holographic, dystopian, blade runner", category: "科幻/奇幻" },
+    { id: "steampunk", label: "蒸汽朋克", keywords: "steampunk, brass gears, victorian era, steam powered, mechanical, copper pipes", category: "科幻/奇幻" },
+    { id: "solarpunk", label: "太阳朋克", keywords: "solarpunk, green technology, sustainable, plants and tech harmony, optimistic future", category: "科幻/奇幻" },
+    { id: "gothic", label: "哥特", keywords: "gothic, dark architecture, pointed arches, stained glass, dramatic shadows, medieval", category: "科幻/奇幻" },
+    { id: "dark_fantasy", label: "暗黑奇幻", keywords: "dark fantasy, eldritch, ominous atmosphere, twisted creatures, grimdark, eerie glow", category: "科幻/奇幻" },
+    { id: "space_opera", label: "太空歌剧", keywords: "space opera, epic scale, starships, nebula, alien worlds, interstellar, cosmic", category: "科幻/奇幻" },
+    // 现代设计
+    { id: "minimalism", label: "极简主义", keywords: "minimalist, clean composition, negative space, simple geometry, monochrome", category: "现代设计" },
+    { id: "memphis", label: "孟菲斯", keywords: "memphis design, bold geometric shapes, bright colors, playful, 1980s, postmodern", category: "现代设计" },
+    { id: "acid_graphics", label: "酸性设计", keywords: "acid graphics, chrome text, liquid metal, distorted typography, rave culture", category: "现代设计" },
+    { id: "y2k", label: "Y2K", keywords: "Y2K, 2000s aesthetic, metallic, butterfly, glossy, futuristic retro, pink chrome", category: "现代设计" },
+    { id: "vaporwave", label: "蒸汽波", keywords: "vaporwave, retro futurism, greek statues, pastel gradient, glitch art, 80s 90s nostalgia", category: "现代设计" },
+];
+
+/** 提示词生成请求 */
+export type PromptGenerateRequest = {
+    input: string;
+    platform: PromptPlatform;
+    style?: string;
+    aspectRatio?: string;
+    extraInstructions?: string;
+};
+
+/** 提示词条目 */
+export type PromptEntry = {
+    id: string;
+    input: string;
+    platform: string;
+    prompt: string;
+    negativePrompt?: string;
+    style?: string;
+    category: PromptCategory;
+};
+
+/** 提示词项目 */
+export type PromptProject = {
+    id: string;
+    title: string;
+    entries: PromptEntry[];
+    createdAt: string;
+    updatedAt: string;
+};

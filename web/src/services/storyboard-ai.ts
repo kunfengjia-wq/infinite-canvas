@@ -11,20 +11,23 @@ import { recordGeneration } from "@/services/db/history-repo";
 
 // ─── Skill: 资产提取 ─────────────────────────────────────────────
 
-const ASSET_EXTRACTOR_SYSTEM = `你是一位影视美术指导。用户会给你一段剧本/故事文本，你需要从中提取所有视觉资产。
+const ASSET_EXTRACTOR_SYSTEM = `你是一位资深影视美术指导，精通广告片、微电影、MV、纪录片、动画等多种影视类型的视觉资产体系。用户会给你一段剧本/故事文本，你需要从中提取所有视觉资产。
 
-提取三类资产：
-1. characters（角色）：name, appearance(外貌描述), personality(性格), costume(服装), keywords(用于AI生图的关键词，英文)
-2. locations（场景/地点）：name, description(环境描述), timeOfDay(时间), lighting(光线), keywords(英文关键词)
-3. props（道具）：name, description(外观描述), significance(剧情意义), keywords(英文关键词)
+提取四类资产：
+1. characters（角色）：name, appearance(外貌描述，具体到发色/发型/体型/面部特征), personality(性格), costume(服装细节), keywords(英文AI生图关键词)
+2. locations（场景/地点）：name, description(环境描述，含空间结构和材质), timeOfDay(时间), lighting(光线氛围), keywords(英文关键词)
+3. props（道具）：name, description(外观描述，含材质/颜色/尺寸感), significance(剧情意义), keywords(英文关键词)
+4. products（产品/品牌资产，广告片必填）：name, brand(品牌), appearance(产品外观：形态/颜色/材质/光泽), packaging(包装描述), significance(品牌意义/卖点), keywords(英文关键词)
 
-要求：
-1. keywords 字段用英文逗号分隔的关键词，适合作为 AI 生图提示词的一部分
-2. 角色外貌描述要具体（发色、发型、体型、特征等）
-3. 不要遗漏重要角色和关键道具
+专业要求：
+1. keywords 用英文逗号分隔，适合作为 AI 生图提示词（如 "young woman, long black hair, red dress, confident pose"）
+2. 角色外貌必须具体可视化，禁止"长得很帅"等模糊描述
+3. 广告类剧本必须提取 products（产品外观、包装、品牌调性）
+4. 场景描述需包含光线方向/色温信息（如"暖黄夕照从左侧45°射入"）
+5. 道具需注明材质（金属/木质/玻璃/织物等）
 
 严格以 JSON 格式输出，不要输出任何其他文字：
-{"characters":[{"name":"小明","appearance":"17岁男生，黑色短发，瘦高","personality":"内向紧张","costume":"白色校服","keywords":"young boy, short black hair, slim, school uniform"}],"locations":[...],"props":[...]}`;
+{"characters":[...],"locations":[...],"props":[...],"products":[...]}`;
 
 export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
     return withRetry(async () => {
@@ -42,17 +45,20 @@ export async function aiExtractAssets(config: AiConfig, script: string, onDelta?
 
 // ─── Skill: 场景拆分 ─────────────────────────────────────────────
 
-const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师。用户会给你一段剧本/故事文本，你需要将其拆分为独立的场景。
+const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师，擅长广告片、微电影、MV、纪录片、动画的节奏把控。用户会给你一段剧本/故事文本，你需要将其拆分为独立的场景。
 
 要求：
 1. 每个场景代表一个连续的时空单元（同一地点、同一时间段）
 2. 场景标题格式："第N场：地点/时间"（如"第1场：教室-白天"）
-3. summary 用1-2句话概括该场景的核心内容
-4. scriptExcerpt 必须包含该场景对应的原始剧本文本（完整复制，不要改写），包括所有对白和动作描写
-5. 合理拆分，不要过细（一般3-15个场景）
+3. summary 用1-2句话概括该场景的核心内容和情绪走向
+4. scriptExcerpt 必须完整复制该场景对应的原始剧本文本（包括所有对白和动作描写，不要改写）
+5. timeRange：根据剧本时间标记或内容节奏推算时间范围（如"00:00-00:15"），广告片注意快节奏（单场5-15s），微电影可舒缓（单场20-60s）
+6. mood：场景情绪氛围，从以下选择或组合：紧张、温馨、压抑、欢快、悲伤、激昂、神秘、浪漫、恐怖、宁静、史诗感、怀旧、梦幻、冷峻、热烈、孤独、希望、绝望、幽默、庄重、荒诞、治愈
+7. colorTone：场景主色调（如"暖金色调"、"冷蓝灰调"、"高饱和撞色"、"莫兰迪低饱和"、"黑白影调"）
+8. 合理拆分，不要过细（一般3-15个场景）
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
-[{"title": "第1场：教室-白天", "summary": "老师宣布考试成绩，主角紧张地等待", "scriptExcerpt": "老师站在讲台上...小明紧张地低下头..."}]`;
+[{"title":"第1场：教室-白天","summary":"老师宣布考试成绩，主角紧张等待","scriptExcerpt":"老师站在讲台上...","timeRange":"00:00-00:15","mood":"紧张","colorTone":"冷白日光调"}]`;
 
 export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<AiSceneResult[]> {
     return withRetry(async () => {
@@ -68,36 +74,44 @@ export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: 
 
 // ─── Skill: 镜头生成 ─────────────────────────────────────────────
 
-const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你一个场景的描述和相关资产信息，你需要为该场景设计具体的镜头列表。
+const SHOT_GENERATOR_SYSTEM = `你是一位顶级分镜师/摄影指导，精通电影级镜头语言。用户会给你一个场景的描述和相关资产信息，你需要为该场景设计专业的镜头列表。
 
-每个镜头包含：
-- shotType: 景别（远景/全景/中景/近景/特写/大特写）
-- angle: 角度（平视/俯视/仰视/斜角/鸟瞰/低角度）
-- action: 画面中的动作描述（具体、可视化）
-- dialogue: 该镜头中角色说的台词（必须从剧本原文中提取，保留原始措辞，格式为"角色名：台词内容"。如果该镜头时间范围内有角色说话，必须填写，不可省略。没有对白则为空字符串）
+每个镜头包含以下字段（括号内为常用参考值，可根据实际需要自由扩展，不限于列表）：
+- shotType 景别（参考：大远景、远景、全景、中全景、中景、中近景、近景、特写、大特写/微距、过肩、主观视角、双人镜头等，也可使用如"无人机俯瞰"、"FPV穿越"等更具体的描述）
+- angle 角度（参考：平视、俯视、仰视、鸟瞰、蛙眼/极低角度、荷兰角、过肩角、主观、客观、倾斜等，也可自由组合如"倾斜俯冲"、"旋转仰拍"）
+- cameraMovement 运镜（参考：固定、推、拉、摇、移、跟、升、降、环绕、一镜到底、航拍、斯坦尼康、手持、轨道、摇臂、甩镜、变焦推拉等，也可使用如"FPV穿越跟拍"、"360度旋转上升"、"无人机俯冲"等）
+- lens 焦距（参考：鱼眼、超广角、广角、标准、中长焦、长焦、微距等，也可使用如"移轴镜头"、"变形宽银幕"、"潜望镜"等）
+- lighting 光线（参考：自然光、伦勃朗光、蝴蝶光、轮廓光、逆光、顶光、底光、侧光、达芬奇调色、霓虹光、体积光、实景光源等，也可使用如"烛光"、"屏幕光"、"闪电"、"激光"等）
+- transition 转场（到下一镜头，参考：硬切、叠化、淡入黑、黑淡入、划像、匹配剪辑、跳切、L-Cut、J-Cut、闪白、模糊转场、遮罩转场等，也可使用如"速度斜坡"、"动态遮罩"、"粒子消散"等）
+- action: 画面动作描述（具体可视化，像给摄影师下指令）
+- dialogue: 该镜头台词（必须从剧本原文提取，格式"角色名：台词"，无对白则为空字符串）
 - duration: 预估时长（如"3s"、"5s"）
-- mood: 情绪氛围（如"紧张"、"温馨"、"压抑"）
+- mood: 情绪氛围
 
-要求：
-1. 每个场景一般3-8个镜头
-2. 注意景别和角度的变化节奏（不要全是中景平视）
-3. action 描述要具体可视化，像在给摄影师下指令
-4. 结合角色资产信息，确保动作描述与角色外貌/性格一致
-5. 【重要】剧本中的每一句对白都必须被分配到某个镜头的 dialogue 字段中，绝对不能遗漏任何台词
+专业规则：
+1. 每场景3-8个镜头，注意节奏：广告片快切（2-4s/镜头），叙事片舒缓（4-8s/镜头）
+2. 景别必须有变化节奏（如 全景→中景→特写→远景 的呼吸感），禁止全部中景平视
+3. 运镜选择需匹配情绪：紧张=手持/快推，浪漫=斯坦尼康/环绕，史诗=航拍/摇臂，纪实=固定/手持跟拍
+4. 焦距选择需匹配空间感：压迫=长焦压缩，开阔=广角，亲密=中长焦，细节=微距
+5. 光线需匹配氛围：温馨=自然光/烛光，悬疑=侧光/底光，商业=蝴蝶光/达芬奇调色，夜店=霓虹光
+6. 转场需有逻辑：同场景内=硬切/跳切，时间流逝=叠化，章节感=淡入黑，创意衔接=匹配剪辑/遮罩转场
+7. 【重要】剧本中的每一句对白都必须分配到某个镜头的 dialogue 字段，绝不遗漏
+8. 结合角色资产确保动作与角色外貌/性格一致
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
-[{"shotType":"中景","angle":"平视","action":"主角推开门走进教室","dialogue":"老师：这次考试成绩出来了","duration":"3s","mood":"紧张"}]`;
+[{"shotType":"全景","angle":"平视","cameraMovement":"斯坦尼康","lens":"广角","lighting":"自然光","transition":"硬切","action":"主角推开门走进教室，阳光从走廊洒入","dialogue":"老师：这次考试成绩出来了","duration":"4s","mood":"紧张"}]`;
 
-export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
+export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, projectMeta?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_shot_generation")) ?? SHOT_GENERATOR_SYSTEM;
         const userContent = [
+            projectMeta ? `【项目信息】${projectMeta}` : "",
             `场景：${sceneTitle}`,
             `概要：${sceneSummary}`,
             assetsContext ? `\n相关资产：\n${assetsContext}` : "",
             `\n相关剧本片段：\n${script}`,
             "\n请为该场景设计镜头列表：",
-        ].join("\n");
+        ].filter(Boolean).join("\n");
         const messages: AiTextMessage[] = [
             { role: "system", content: systemPrompt },
             { role: "user", content: userContent },
@@ -109,21 +123,24 @@ export async function aiGenerateShots(config: AiConfig, sceneTitle: string, scen
 
 // ─── Skill: 画面描述生成 ─────────────────────────────────────────
 
-const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述专家。用户会给你一个镜头的基本信息（景别、角度、动作、氛围）以及该项目的角色/场景/道具资产描述，你需要生成一段详细的画面视觉描述。
+const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述大师，精通摄影、灯光、调色和构图的专业词汇。用户会给你一个镜头的完整信息（景别、角度、运镜、焦距、光线、动作、氛围）以及项目资产，你需要生成一段电影级画面视觉描述。
 
 要求：
-1. 描述要像一段画面说明，涵盖：主体、环境、光线、色彩、构图、材质
-2. 必须结合资产信息中的角色外貌、场景环境、道具外观来描述，确保视觉一致性
-3. 语言精炼但信息密度高，适合作为 AI 生图的输入
-4. 80-150字为佳
-5. 直接输出描述文本，不要加引号或前缀`;
+1. 描述涵盖七要素：主体、动作、环境、光线、色彩、构图、材质/质感
+2. 必须体现镜头语言：将运镜方式转化为画面动态描述（如"镜头缓缓推近"、"航拍俯瞰大地"）
+3. 必须体现光线设计：说明光源方向、色温、光影效果（如"逆光勾勒发丝轮廓，暖金色光晕弥漫"）
+4. 必须结合资产信息确保视觉一致性（角色外貌、场景环境、产品外观）
+5. 使用专业色彩词汇：不要"红色"，用"深绯红"、"铁锈红"、"珊瑚粉"
+6. 加入材质/质感描述：皮肤质感、织物纹理、金属反光、玻璃折射、烟雾颗粒
+7. 100-200字，信息密度高，每句话都有视觉价值，适合作为 AI 生图/生视频输入
+8. 直接输出描述文本，不要加引号或前缀`;
 
-export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
+export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
     const systemPrompt = (await getSkillPrompt("sb_visual_description")) ?? VISUAL_DESCRIPTOR_SYSTEM;
     const userContent = [
         `场景背景：${sceneContext}`,
         assetsContext ? `\n项目资产（角色/场景/道具）：\n${assetsContext}` : "",
-        `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
+        `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.cameraMovement ? `，运镜=${shot.cameraMovement}` : ""}${shot.lens ? `，镜头=${shot.lens}` : ""}${shot.lighting ? `，光线=${shot.lighting}` : ""}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
         "\n请生成画面视觉描述：",
     ].join("\n");
     const messages: AiTextMessage[] = [
@@ -188,7 +205,7 @@ const TRANSITION_ADVISOR_SYSTEM = `你是影视剪辑师。给定相邻两个场
 输出 JSON 格式：
 {"transition": "转场类型", "reason": "选择理由（一句话）", "duration": "建议时长"}
 
-转场类型可选：
+转场类型参考（可根据创意需要自由扩展）：
 - cut（硬切）：节奏快、同场景内
 - dissolve（叠化）：时间流逝、情绪过渡
 - fade_to_black（淡入黑）：章节结束、重大转折
@@ -197,6 +214,7 @@ const TRANSITION_ADVISOR_SYSTEM = `你是影视剪辑师。给定相邻两个场
 - match_cut（匹配剪辑）：视觉/动作衔接
 - jump_cut（跳切）：同角度时间压缩
 - l_cut / j_cut（声音先行/画面先行）：对白衔接
+- 也可使用：速度斜坡、动态遮罩、粒子消散、闪回、旋转转场等更创意的方式
 
 严格以 JSON 格式输出，不要输出任何其他文字。`;
 
@@ -238,26 +256,43 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
 
 /** 将 StoryAssets 构建为传递给 AI 的上下文字符串 */
 export function buildAssetsContext(assets: StoryAssets): string {
+    if (!assets) return "";
     const parts: string[] = [];
-    if (assets.characters.length) {
+    if (assets.characters?.length) {
         parts.push("【角色】");
         assets.characters.forEach((c) => {
             parts.push(`- ${c.name}：${c.appearance}${c.costume ? `，服装：${c.costume}` : ""}${c.keywords ? ` [关键词: ${c.keywords}]` : ""}`);
         });
     }
-    if (assets.locations.length) {
+    if (assets.locations?.length) {
         parts.push("【场景】");
         assets.locations.forEach((l) => {
             parts.push(`- ${l.name}：${l.description}${l.timeOfDay ? `，时间：${l.timeOfDay}` : ""}${l.lighting ? `，光线：${l.lighting}` : ""}${l.keywords ? ` [关键词: ${l.keywords}]` : ""}`);
         });
     }
-    if (assets.props.length) {
+    if (assets.props?.length) {
         parts.push("【道具】");
         assets.props.forEach((p) => {
             parts.push(`- ${p.name}：${p.description}${p.significance ? `（${p.significance}）` : ""}${p.keywords ? ` [关键词: ${p.keywords}]` : ""}`);
         });
     }
+    if (assets.products?.length) {
+        parts.push("【产品/品牌】");
+        assets.products.forEach((p) => {
+            parts.push(`- ${p.name}${p.brand ? `（${p.brand}）` : ""}：${p.appearance}${p.packaging ? `，包装：${p.packaging}` : ""}${p.significance ? `，品牌意义：${p.significance}` : ""}${p.keywords ? ` [关键词: ${p.keywords}]` : ""}`);
+        });
+    }
     return parts.join("\n");
+}
+
+/** 构建项目元信息上下文（类型/时长/风格/平台） */
+export function buildProjectMetaContext(project: { projectType?: string; targetDuration?: number; visualStyle?: string; targetPlatform?: string }): string {
+    const parts: string[] = [];
+    if (project.projectType) parts.push(`项目类型：${project.projectType}`);
+    if (project.targetDuration) parts.push(`目标时长：${project.targetDuration}秒`);
+    if (project.visualStyle) parts.push(`视觉风格：${project.visualStyle}`);
+    if (project.targetPlatform) parts.push(`目标平台：${project.targetPlatform}`);
+    return parts.join("，");
 }
 
 function parseJsonArray<T>(raw: string): T[] {

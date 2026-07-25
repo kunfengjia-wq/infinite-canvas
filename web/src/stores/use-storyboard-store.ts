@@ -57,7 +57,7 @@ function now() {
 }
 
 function createEmptyProject(title: string, script: string): StoryboardProject {
-    return { id: nanoid(), title, script, assets: { characters: [], locations: [], props: [] }, scenes: [], status: "draft", createdAt: now(), updatedAt: now() };
+    return { id: nanoid(), title, script, assets: { characters: [], locations: [], props: [], products: [] }, scenes: [], status: "draft", createdAt: now(), updatedAt: now() };
 }
 
 /** 在变更前推入快照（带 opKey 合并） */

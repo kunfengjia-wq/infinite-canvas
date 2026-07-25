@@ -8,13 +8,25 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
-import { aiGenerateShots, buildAssetsContext } from "@/services/storyboard-ai";
+import { aiGenerateShots, buildAssetsContext, buildProjectMetaContext } from "@/services/storyboard-ai";
 import { useCopyText } from "@/hooks/use-copy-text";
+import { SHOT_TYPES, CAMERA_ANGLES, CAMERA_MOVEMENTS, LENS_TYPES, LIGHTING_TYPES, TRANSITION_TYPES, toSelectOptions } from "@/data/cinematography";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Scene, Shot } from "@/types/storyboard";
 
-const SHOT_TYPE_OPTIONS = ["远景", "全景", "中景", "近景", "特写", "大特写"];
-const ANGLE_OPTIONS = ["平视", "俯视", "仰视", "斜角", "鸟瞰", "低角度"];
+// ─── 选项（从专业数据库加载，支持 AI 输出的自定义值）───
+const SHOT_TYPE_OPTIONS = toSelectOptions(SHOT_TYPES);
+const ANGLE_OPTIONS = toSelectOptions(CAMERA_ANGLES);
+const MOVEMENT_OPTIONS = toSelectOptions(CAMERA_MOVEMENTS);
+const LENS_OPTIONS = toSelectOptions(LENS_TYPES);
+const LIGHTING_OPTIONS = toSelectOptions(LIGHTING_TYPES);
+const TRANSITION_OPTIONS = toSelectOptions(TRANSITION_TYPES);
+
+/** 将当前值动态加入选项列表（AI 可能输出数据库之外的自定义值） */
+function withCurrent(options: { label: string; value: string }[], current?: string): { label: string; value: string }[] {
+    if (!current || options.some((o) => o.value === current)) return options;
+    return [{ label: current, value: current }, ...options];
+}
 
 // ─── 可拖拽镜头卡片 ───
 function SortableShotCard({ shot, sceneId }: { shot: Shot; sceneId: string }) {
@@ -46,27 +58,41 @@ function SortableShotCard({ shot, sceneId }: { shot: Shot; sceneId: string }) {
                     <span className="mt-1 flex size-5 shrink-0 items-center justify-center rounded bg-stone-200 text-[10px] font-bold text-stone-500 dark:bg-stone-700">
                         {shot.index + 1}
                     </span>
-                    <div className="grid flex-1 gap-2 sm:grid-cols-2">
-                        <div className="flex gap-2">
-                            <Select size="small" value={shot.shotType} onChange={(v) => updateShot(sceneId, shot.id, { shotType: v })} options={SHOT_TYPE_OPTIONS.map((o) => ({ label: o, value: o }))} className="w-24" />
-                            <Select size="small" value={shot.angle} onChange={(v) => updateShot(sceneId, shot.id, { angle: v })} options={ANGLE_OPTIONS.map((o) => ({ label: o, value: o }))} className="w-24" />
-                            <Input size="small" value={shot.duration || ""} onChange={(e) => updateShot(sceneId, shot.id, { duration: e.target.value || undefined })} placeholder="时长" className="w-16" />
-                            {shot.mood && <Tag color="blue" className="self-center">{shot.mood}</Tag>}
+                    <div className="flex-1 space-y-2">
+                        {/* 第一行：景别 / 角度 / 时长 / 氛围 */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Select size="small" value={shot.shotType} onChange={(v) => updateShot(sceneId, shot.id, { shotType: v })} options={withCurrent(SHOT_TYPE_OPTIONS, shot.shotType)} showSearch className="!w-24" popupMatchSelectWidth={false} />
+                            <Select size="small" value={shot.angle} onChange={(v) => updateShot(sceneId, shot.id, { angle: v })} options={withCurrent(ANGLE_OPTIONS, shot.angle)} showSearch className="!w-24" popupMatchSelectWidth={false} />
+                            <Input size="small" value={shot.duration || ""} onChange={(e) => updateShot(sceneId, shot.id, { duration: e.target.value || undefined })} placeholder="时长" className="!w-16" />
+                            {shot.mood && <Tag color="blue" className="!m-0 self-center">{shot.mood}</Tag>}
                         </div>
+                        {/* 第二行：运镜 / 焦距 / 光线 / 转场 */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Select size="small" value={shot.cameraMovement || undefined} onChange={(v) => updateShot(sceneId, shot.id, { cameraMovement: v || undefined })} options={withCurrent(MOVEMENT_OPTIONS, shot.cameraMovement)} placeholder="运镜" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
+                            <Select size="small" value={shot.lens || undefined} onChange={(v) => updateShot(sceneId, shot.id, { lens: v || undefined })} options={withCurrent(LENS_OPTIONS, shot.lens)} placeholder="焦距" allowClear showSearch className="!w-24" popupMatchSelectWidth={false} />
+                            <Select size="small" value={shot.lighting || undefined} onChange={(v) => updateShot(sceneId, shot.id, { lighting: v || undefined })} options={withCurrent(LIGHTING_OPTIONS, shot.lighting)} placeholder="光线" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
+                            <Select size="small" value={shot.transition || undefined} onChange={(v) => updateShot(sceneId, shot.id, { transition: v || undefined })} options={withCurrent(TRANSITION_OPTIONS, shot.transition)} placeholder="转场→" allowClear showSearch className="!w-28" popupMatchSelectWidth={false} />
+                        </div>
+                        {/* 动作 + 对白 */}
                         <Input size="small" value={shot.action} onChange={(e) => updateShot(sceneId, shot.id, { action: e.target.value })} placeholder="动作描述" />
-                        <Input size="small" value={shot.dialogue || ""} onChange={(e) => updateShot(sceneId, shot.id, { dialogue: e.target.value || undefined })} placeholder="对白（可选）" className="sm:col-span-2" />
+                        <Input size="small" value={shot.dialogue || ""} onChange={(e) => updateShot(sceneId, shot.id, { dialogue: e.target.value || undefined })} placeholder="对白（可选）" />
                     </div>
-                    <Popconfirm title="删除此镜头？" onConfirm={() => removeShot(sceneId, shot.id)} okText="删除" cancelText="取消">
-                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
-                    </Popconfirm>
-                    <Button
-                        type="text"
-                        size="small"
-                        icon={<Copy className="size-3.5" />}
-                        className="opacity-0 transition group-hover:opacity-100"
-                        title="复制镜头信息"
-                        onClick={() => copyText(`[${shot.shotType}/${shot.angle}] ${shot.action}${shot.dialogue ? ` | 对白：${shot.dialogue}` : ""}${shot.duration ? ` | ${shot.duration}` : ""}`, "镜头已复制")}
-                    />
+                    <div className="flex shrink-0 flex-col gap-1">
+                        <Popconfirm title="删除此镜头？" onConfirm={() => removeShot(sceneId, shot.id)} okText="删除" cancelText="取消">
+                            <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
+                        </Popconfirm>
+                        <Button
+                            type="text"
+                            size="small"
+                            icon={<Copy className="size-3.5" />}
+                            className="opacity-0 transition group-hover:opacity-100"
+                            title="复制镜头信息"
+                            onClick={() => copyText(
+                                `[${shot.shotType}/${shot.angle}${shot.cameraMovement ? `/${shot.cameraMovement}` : ""}] ${shot.action}${shot.dialogue ? ` | 对白：${shot.dialogue}` : ""}${shot.duration ? ` | ${shot.duration}` : ""}${shot.lighting ? ` | 光线：${shot.lighting}` : ""}`,
+                                "镜头已复制",
+                            )}
+                        />
+                    </div>
                 </div>
             </Card>
         </div>
@@ -109,15 +135,16 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
     const [generatingScene, setGeneratingScene] = useState<string | null>(null);
 
     if (!current) return null;
-    const scenes = current.scenes;
+    const scenes = current.scenes ?? [];
 
     const handleAiShots = async (scene: Scene) => {
         setGeneratingScene(scene.id);
         setProcessing(true);
         try {
             const assetsCtx = buildAssetsContext(current.assets);
+            const projectMeta = buildProjectMetaContext(current);
             const scriptForScene = scene.scriptExcerpt || current.script;
-            const results = await aiGenerateShots(config, scene.title, scene.summary, scriptForScene, assetsCtx || undefined);
+            const results = await aiGenerateShots(config, scene.title, scene.summary, scriptForScene, assetsCtx || undefined, projectMeta || undefined);
             const shots: Shot[] = results.map((r, i) => ({
                 id: nanoid(),
                 index: i,
@@ -127,11 +154,15 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
                 dialogue: r.dialogue || undefined,
                 duration: r.duration || undefined,
                 mood: r.mood || undefined,
+                cameraMovement: r.cameraMovement || undefined,
+                lens: r.lens || undefined,
+                lighting: r.lighting || undefined,
+                transition: r.transition || undefined,
                 visualDescription: "",
                 confirmed: false,
             }));
             setSceneShots(scene.id, shots);
-            message.success(`「${scene.title}」已生成 ${shots.length} 个镜头`);
+            message.success(`「${scene.title}」已生成 ${shots.length} 个专业镜头`);
         } catch (error) {
             onError(error instanceof Error ? error.message : "镜头生成失败");
         } finally {
@@ -158,7 +189,7 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
             <div className="mb-6 flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-medium">镜头细化</h2>
-                    <p className="mt-1 text-sm text-stone-500">为每个场景生成分镜镜头，拖拽手柄可调整顺序</p>
+                    <p className="mt-1 text-sm text-stone-500">为每个场景生成专业分镜（景别/角度/运镜/焦距/光线/转场），拖拽可调整顺序</p>
                 </div>
                 <Button type="primary" size="large" disabled={totalShots === 0} onClick={handleConfirm}>
                     确认镜头（{totalShots} 个）→ 下一步
@@ -173,7 +204,8 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
                         <div className="flex items-center gap-2">
                             <span className="font-medium">{scene.title}</span>
                             <Tag>{scene.shots.length} 镜头</Tag>
-                            {scene.summary && <span className="text-xs text-stone-400">{scene.summary}</span>}
+                            {scene.mood && <Tag color="purple">{scene.mood}</Tag>}
+                            {scene.summary && <span className="hidden text-xs text-stone-400 lg:inline">{scene.summary}</span>}
                         </div>
                     ),
                     extra: (

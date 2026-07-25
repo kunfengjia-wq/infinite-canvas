@@ -1,11 +1,14 @@
-import { FileText, FileUp, LoaderCircle, Sparkles } from "lucide-react";
+import { ChevronDown, FileText, FileUp, LoaderCircle, Settings2, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Input, Upload } from "antd";
+import { App, Button, Collapse, Input, InputNumber, Select, Upload } from "antd";
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiGenerateScript } from "@/services/storyboard-ai";
+import { PROJECT_TYPES, toSelectOptions } from "@/data/cinematography";
+import { toGroupedSelectOptions } from "@/data/visual-styles";
+import { PLATFORM_LIST } from "@/types/prompt-studio";
 import type { AiConfig } from "@/stores/use-config-store";
 
 // 配置 PDF.js worker
@@ -59,7 +62,24 @@ export function ScriptInput({ config }: { config: AiConfig }) {
     const [parsing, setParsing] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [fileName, setFileName] = useState("");
+    // 项目配置
+    const [projectType, setProjectType] = useState<string | undefined>(undefined);
+    const [targetDuration, setTargetDuration] = useState<number | null>(null);
+    const [visualStyle, setVisualStyle] = useState<string | undefined>(undefined);
+    const [targetPlatform, setTargetPlatform] = useState<string | undefined>(undefined);
     const { createProject, setStep, current } = useStoryboardStore();
+
+    const projectTypeOptions = toSelectOptions(PROJECT_TYPES);
+    const styleOptions = toGroupedSelectOptions();
+    const platformOptions = PLATFORM_LIST.map((p) => ({ label: `${p.label}（${p.category === "video" ? "视频" : "图片"}）`, value: p.label }));
+
+    /** 风格 Select 支持自定义输入（用户可能输入数据库之外的风格） */
+    const styleOptionsWithCustom = (current?: string) => {
+        if (!current) return styleOptions;
+        const exists = styleOptions.some((g) => g.options.some((o) => o.value === current));
+        if (exists) return styleOptions;
+        return [...styleOptions, { label: "自定义", options: [{ label: current, value: current }] }];
+    };
 
     const handleFile = async (file: File) => {
         setParsing(true);
@@ -86,13 +106,25 @@ export function ScriptInput({ config }: { config: AiConfig }) {
             return;
         }
         const projectTitle = title.trim() || `分镜项目 ${new Date().toLocaleDateString()}`;
-        if (current && current.status === "draft" && !current.scenes.length) {
+        const meta = {
+            projectType: projectType || undefined,
+            targetDuration: targetDuration || undefined,
+            visualStyle: visualStyle || undefined,
+            targetPlatform: targetPlatform || undefined,
+        };
+        if (current && current.status === "draft" && !(current.scenes ?? []).length) {
             useStoryboardStore.setState((state) => ({
-                current: state.current ? { ...state.current, title: projectTitle, script: script.trim() } : state.current,
+                current: state.current ? { ...state.current, title: projectTitle, script: script.trim(), ...meta } : state.current,
             }));
             await useStoryboardStore.getState().saveCurrent();
         } else {
-            await createProject(projectTitle, script.trim());
+            const id = await createProject(projectTitle, script.trim());
+            // 创建后补充元信息
+            useStoryboardStore.setState((state) => ({
+                current: state.current?.id === id ? { ...state.current, ...meta } : state.current,
+                projects: state.projects.map((p) => (p.id === id ? { ...p, ...meta } : p)),
+            }));
+            await useStoryboardStore.getState().saveCurrent();
         }
         setStep(2);
         message.success("项目已创建，进入资产提取");
@@ -132,6 +164,75 @@ export function ScriptInput({ config }: { config: AiConfig }) {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     prefix={<FileText className="size-4 text-stone-400" />}
+                />
+
+                {/* 项目配置（可选） */}
+                <Collapse
+                    ghost
+                    expandIcon={({ isActive }) => <ChevronDown className={`size-4 text-stone-400 transition-transform ${isActive ? "rotate-180" : ""}`} />}
+                    items={[{
+                        key: "config",
+                        label: (
+                            <span className="flex items-center gap-2 text-sm text-stone-500">
+                                <Settings2 className="size-4" />
+                                项目配置（可选，影响 AI 生成风格）
+                                {projectType && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600 dark:bg-blue-950 dark:text-blue-400">{projectType}</span>}
+                                {visualStyle && <span className="rounded bg-purple-50 px-1.5 py-0.5 text-xs text-purple-600 dark:bg-purple-950 dark:text-purple-400">{visualStyle}</span>}
+                            </span>
+                        ),
+                        children: (
+                            <div className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50/50 p-4 sm:grid-cols-2 dark:border-stone-700 dark:bg-stone-900/30">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-stone-500">项目类型</label>
+                                    <Select
+                                        value={projectType}
+                                        onChange={setProjectType}
+                                        options={projectTypeOptions}
+                                        placeholder="广告宣传片 / 微电影 / MV..."
+                                        allowClear
+                                        showSearch
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-stone-500">目标时长（秒）</label>
+                                    <InputNumber
+                                        value={targetDuration}
+                                        onChange={setTargetDuration}
+                                        min={5}
+                                        max={3600}
+                                        placeholder="如 60"
+                                        className="!w-full"
+                                        addonAfter="秒"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-stone-500">视觉风格偏好</label>
+                                    <Select
+                                        value={visualStyle}
+                                        onChange={setVisualStyle}
+                                        options={styleOptionsWithCustom(visualStyle)}
+                                        placeholder="电影写实 / 3DCG / 赛博朋克..."
+                                        allowClear
+                                        showSearch
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-stone-500">目标生成平台</label>
+                                    <Select
+                                        value={targetPlatform}
+                                        onChange={setTargetPlatform}
+                                        options={platformOptions}
+                                        placeholder="可灵 / Runway / Midjourney..."
+                                        allowClear
+                                        showSearch
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
+                        ),
+                    }]}
                 />
 
                 {/* 拖拽上传区域 */}

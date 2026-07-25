@@ -279,7 +279,17 @@ function withSystemPrompt(config: AiConfig, prompt: string) {
 }
 
 function aiApiUrl(config: AiConfig, path: string) {
-    return buildApiUrl(config.baseUrl, path);
+    const url = buildApiUrl(config.baseUrl, path);
+    // 开发环境：通过 vite 代理绕过 CORS 限制
+    if (import.meta.env.DEV) {
+        const proxyTarget = (import.meta.env.VITE_AI_PROXY_TARGET || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com").replace(/\/+$/, "");
+        const proxyRewrite = (import.meta.env.VITE_AI_PROXY_REWRITE || "/compatible-mode").replace(/\/+$/, "");
+        const origin = proxyTarget + proxyRewrite;
+        if (url.startsWith(origin)) {
+            return url.replace(origin, "/ai-cors-proxy");
+        }
+    }
+    return url;
 }
 
 function aiHeaders(config: AiConfig, contentType?: string) {
@@ -475,7 +485,7 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
 async function requestChatCompletionsStreaming(config: AiConfig, messages: ResponseInputMessage[], onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {
     const chatMessages = messages
         .filter((m): m is Extract<ResponseInputMessage, { role: string }> => !("type" in m))
-        .map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content : m.content.map((c: { text?: string }) => c.text || "").join("") }));
+        .map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content : m.content.map((c) => ("text" in c ? c.text : c.image_url.url)).join(" ") }));
     const response = await fetch(aiApiUrl(config, "/chat/completions"), {
         method: "POST",
         headers: { ...aiHeaders(config, "application/json"), Accept: "text/event-stream" },

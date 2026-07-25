@@ -95,11 +95,11 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                     const categoryMeta = PROMPT_CATEGORIES.find((c) => c.id === entry.category);
                     return (
                         <Card key={entry.id} size="small" className="group">
-                            <div className="mb-2 flex items-center gap-2">
+                            <div className="mb-2 flex items-start gap-2">
                                 {categoryMeta && <Tag color={categoryMeta.color}>{categoryMeta.label}</Tag>}
                                 <Tag color={platformMeta?.category === "video" ? "purple" : "blue"}>{platformMeta?.label || entry.platform}</Tag>
                                 {entry.style && <Tag>{entry.style}</Tag>}
-                                <span className="min-w-0 flex-1 truncate text-xs text-stone-400">{entry.input}</span>
+                                <span className="min-w-0 flex-1 whitespace-normal break-all text-xs leading-relaxed text-stone-400">{entry.input}</span>
                                 <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
                                     <Button type="text" size="small" icon={regeneratingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} disabled={regeneratingId === entry.id} onClick={() => handleRegenerate(entry.id, entry.input, entry.platform, entry.style)} title="重新生成" />
                                     <Tooltip title="AI 优化提示词">
@@ -117,8 +117,8 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                             <Input.TextArea
                                 value={entry.prompt}
                                 onChange={(e) => updateEntry(entry.id, { prompt: e.target.value })}
-                                rows={3}
-                                className="font-mono text-xs"
+                                autoSize={{ minRows: 2, maxRows: 12 }}
+                                className="font-mono text-xs leading-relaxed"
                             />
                             {entry.negativePrompt && (
                                 <div className="mt-2">
@@ -126,8 +126,8 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                     <Input.TextArea
                                         value={entry.negativePrompt}
                                         onChange={(e) => updateEntry(entry.id, { negativePrompt: e.target.value })}
-                                        rows={2}
-                                        className="mt-1 font-mono text-xs text-red-300"
+                                        autoSize={{ minRows: 1, maxRows: 6 }}
+                                        className="mt-1 font-mono text-xs leading-relaxed text-red-300"
                                     />
                                 </div>
                             )}
