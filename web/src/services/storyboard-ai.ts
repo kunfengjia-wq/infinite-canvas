@@ -8,6 +8,42 @@ import type { AiConfig } from "@/stores/use-config-store";
 import type { AiSceneResult, AiShotResult, StoryAssets } from "@/types/storyboard";
 import { getSkillPrompt } from "@/services/db/skills-repo";
 import { recordGeneration } from "@/services/db/history-repo";
+import { supabase } from "@/services/db/supabase-client";
+
+// ─── Few-shot 检索（Supabase dataset_items）─────────────────────
+
+const fewShotCache = new Map<string, string>();
+
+/** 按 tag 从 dataset_items 检索高质量 few-shot 示例，注入 system prompt 尾部 */
+async function getStoryboardFewShot(tag: string, limit = 3): Promise<string> {
+    const cached = fewShotCache.get(tag);
+    if (cached !== undefined) return cached;
+
+    try {
+        const { data } = await supabase
+            .from("dataset_items")
+            .select("title, prompt")
+            .contains("tags", [tag])
+            .order("quality_score", { ascending: false })
+            .limit(limit);
+
+        if (!data || data.length === 0) {
+            fewShotCache.set(tag, "");
+            return "";
+        }
+
+        const examples = data
+            .map((item: { title: string; prompt: string }, i: number) => `参考示例${i + 1}（${item.title}）：\n${item.prompt}`)
+            .join("\n\n");
+
+        const result = `\n\n---\n以下是专业参考示例，仅供风格和结构参考，不要照搬内容：\n\n${examples}`;
+        fewShotCache.set(tag, result);
+        return result;
+    } catch {
+        fewShotCache.set(tag, "");
+        return "";
+    }
+}
 
 // ─── Skill: 资产提取 ─────────────────────────────────────────────
 
@@ -32,8 +68,9 @@ const ASSET_EXTRACTOR_SYSTEM = `你是一位资深影视美术指导，精通广
 export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_asset_extraction")) ?? ASSET_EXTRACTOR_SYSTEM;
+        const fewShot = await getStoryboardFewShot("asset_extraction");
         const messages: AiTextMessage[] = [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: systemPrompt + fewShot },
             { role: "user", content: `请从以下剧本中提取视觉资产：\n\n${script}` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
@@ -63,8 +100,9 @@ const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师，擅长广�
 export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<AiSceneResult[]> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_scene_split")) ?? SCENE_SPLITTER_SYSTEM;
+        const fewShot = await getStoryboardFewShot("scene_split");
         const messages: AiTextMessage[] = [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: systemPrompt + fewShot },
             { role: "user", content: `请将以下剧本拆分为场景：\n\n${script}` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
@@ -105,6 +143,7 @@ const SHOT_GENERATOR_SYSTEM = `你是一位顶级分镜师/摄影指导，精通
 export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, projectMeta?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_shot_generation")) ?? SHOT_GENERATOR_SYSTEM;
+        const fewShot = await getStoryboardFewShot("storyboard");
         const userContent = [
             projectMeta ? `【项目信息】${projectMeta}` : "",
             `场景：${sceneTitle}`,
@@ -114,7 +153,7 @@ export async function aiGenerateShots(config: AiConfig, sceneTitle: string, scen
             "\n请为该场景设计镜头列表：",
         ].filter(Boolean).join("\n");
         const messages: AiTextMessage[] = [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: systemPrompt + fewShot },
             { role: "user", content: userContent },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
@@ -138,6 +177,7 @@ const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述大师，精通摄影�
 
 export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string; composition?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
     const systemPrompt = (await getSkillPrompt("sb_visual_description")) ?? VISUAL_DESCRIPTOR_SYSTEM;
+    const fewShot = await getStoryboardFewShot("visual_description");
     const userContent = [
         `场景背景：${sceneContext}`,
         assetsContext ? `\n项目资产（角色/场景/道具）：\n${assetsContext}` : "",
@@ -145,7 +185,7 @@ export async function aiGenerateVisualDescription(config: AiConfig, shot: { shot
         "\n请生成画面视觉描述：",
     ].join("\n");
     const messages: AiTextMessage[] = [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: systemPrompt + fewShot },
         { role: "user", content: userContent },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
@@ -228,9 +268,10 @@ export interface TransitionSuggestion {
 export async function aiSuggestTransition(config: AiConfig, sceneA: { title: string; summary: string; mood?: string }, sceneB: { title: string; summary: string; mood?: string }, onDelta?: (text: string) => void): Promise<TransitionSuggestion> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_transition_advisor")) ?? TRANSITION_ADVISOR_SYSTEM;
+        const fewShot = await getStoryboardFewShot("transition");
         const userContent = `场景A：${sceneA.title}\n概要：${sceneA.summary}${sceneA.mood ? `\n氛围：${sceneA.mood}` : ""}\n\n场景B：${sceneB.title}\n概要：${sceneB.summary}${sceneB.mood ? `\n氛围：${sceneB.mood}` : ""}\n\n请推荐转场方式：`;
         const messages: AiTextMessage[] = [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: systemPrompt + fewShot },
             { role: "user", content: userContent },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
