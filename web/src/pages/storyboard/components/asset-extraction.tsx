@@ -68,34 +68,45 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 
     const total = assets.characters.length + assets.locations.length + assets.props.length + assets.products.length;
 
-    /** 将资产关键词发送到提示词工作台（带视图/平台选择） */
+    /** 将资产关键词发送到提示词工作台（带视图/风格/平台选择） */
     const [sendPanel, setSendPanel] = useState<{ name: string; keywords: string; category: PromptCategory } | null>(null);
     const [sendFormat, setSendFormat] = useState("three-view");
+    const [sendStyle, setSendStyle] = useState("photorealistic");
     const [sendPlatform, setSendPlatform] = useState("midjourney");
 
-    const FORMAT_OPTIONS: Record<string, { value: string; label: string; prefix: string }[]> = {
+    /** 自然语言句式模板，{subject} 会被替换为 keywords */
+    const FORMAT_OPTIONS: Record<string, { value: string; label: string; template: string }[]> = {
         character: [
-            { value: "three-view", label: "三视图（正/侧/背）", prefix: "character design sheet, three views, front view, side view, back view," },
-            { value: "four-view", label: "四视图（正/侧/背/3/4）", prefix: "character turnaround sheet, four views, front view, side view, back view, three-quarter view," },
-            { value: "bust", label: "半身特写", prefix: "character portrait, bust shot, head and shoulders, detailed face," },
-            { value: "fullbody", label: "全身单张", prefix: "full body character concept art, single pose," },
+            { value: "three-view", label: "三视图（正/侧/背）", template: "Professional character reference sheet of {subject}. Displayed in three aligned views: front, side, and back. Neutral T-pose, clean pure white background, no props, no scene elements." },
+            { value: "four-view", label: "四视图（正/侧/背/3/4）", template: "Character turnaround model sheet of {subject}. Four aligned views: front, three-quarter, side, and back. Neutral standing pose, clean white background, production-ready reference." },
+            { value: "bust", label: "半身特写", template: "Detailed character portrait bust shot of {subject}. Head and shoulders, facing camera, intricate facial details visible, clean neutral background." },
+            { value: "fullbody", label: "全身单张", template: "Full body character concept art of {subject}. Single dynamic pose, entire figure visible head to toe, clean background, production quality." },
         ],
         scene: [
-            { value: "wide", label: "全景（建立镜头）", prefix: "wide establishing shot, full environment," },
-            { value: "medium", label: "中景", prefix: "medium shot, partial environment," },
-            { value: "detail", label: "细节特写", prefix: "extreme close-up detail shot, texture focus," },
+            { value: "wide", label: "全景（建立镜头）", template: "Wide establishing shot of {subject}. Full environment visible, cinematic composition, depth and scale conveyed, atmospheric perspective." },
+            { value: "medium", label: "中景", template: "Medium shot of {subject}. Key environmental details in focus, balanced foreground and background, natural depth of field." },
+            { value: "detail", label: "细节特写", template: "Extreme close-up detail shot of {subject}. Texture and material quality emphasized, shallow depth of field, macro photography feel." },
         ],
         prop: [
-            { value: "single", label: "单物体（白底）", prefix: "isolated object, white background, studio lighting, product photography," },
-            { value: "multi-angle", label: "多角度展示", prefix: "multiple angles showcase, front and side and top view, white background," },
-            { value: "in-context", label: "场景搭配", prefix: "in context, lifestyle setting," },
+            { value: "single", label: "单物体（白底）", template: "Professional product photography of {subject}. Isolated on seamless white background, soft diffused studio lighting, sharp focus, no environment." },
+            { value: "multi-angle", label: "多角度展示", template: "Multi-angle showcase of {subject}. Front, side, and top views arranged on white background, consistent studio lighting, technical reference style." },
+            { value: "in-context", label: "场景搭配", template: "Lifestyle shot of {subject} placed in a natural real-world setting. Contextual environment, soft natural lighting, editorial photography style." },
         ],
         product: [
-            { value: "hero", label: "主图（白底商业照）", prefix: "hero product shot, clean white background, studio softbox lighting, commercial," },
-            { value: "multi-angle", label: "多角度", prefix: "product multi-angle showcase, 360 degree views, white background," },
-            { value: "lifestyle", label: "场景生活化", prefix: "lifestyle product photography, natural setting, in use," },
+            { value: "hero", label: "主图（商业广告级）", template: "High-end commercial product photography of {subject}. Pristine white seamless background, professional three-point studio lighting, hero angle, advertising campaign quality, razor-sharp detail." },
+            { value: "multi-angle", label: "多角度", template: "Product multi-angle presentation of {subject}. 360-degree views on clean white background, consistent professional lighting, e-commerce catalog style." },
+            { value: "lifestyle", label: "场景生活化", template: "Lifestyle brand photography of {subject} in an aspirational real-life setting. Natural warm lighting, editorial composition, premium brand feel." },
         ],
     };
+
+    const STYLE_OPTIONS = [
+        { value: "photorealistic", label: "写实摄影", suffix: "Photorealistic, shot on Phase One IQ4 150MP, 8K resolution, hyper-detailed skin and material textures." },
+        { value: "cinematic", label: "电影质感", suffix: "Cinematic film still quality, anamorphic lens, subtle film grain, professional color grading, ARRI Alexa 65 look." },
+        { value: "commercial", label: "商业广告", suffix: "Premium advertising quality, retouched to perfection, magazine-cover sharpness, high-end brand aesthetic." },
+        { value: "concept-art", label: "概念艺术", suffix: "Professional concept art for film production, painted realism, artstation trending quality, by senior visual development artist." },
+        { value: "anime", label: "日系动漫", suffix: "High-quality anime illustration style, clean lineart, cel shading, vibrant colors, studio-quality animation key visual." },
+        { value: "3d-render", label: "3D 渲染", suffix: "Photorealistic 3D render, Octane Render, global illumination, subsurface scattering, physically-based materials, 8K." },
+    ];
 
     const doSend = async () => {
         if (!sendPanel) return;
@@ -103,10 +114,12 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
         if (!keywords.trim()) { message.warning("该资产没有关键词"); setSendPanel(null); return; }
         const options = FORMAT_OPTIONS[category] || FORMAT_OPTIONS.prop;
         const fmt = options.find((o) => o.value === sendFormat);
-        const finalPrompt = fmt ? `${fmt.prefix} ${keywords}` : keywords;
+        const style = STYLE_OPTIONS.find((s) => s.value === sendStyle);
+        const body = fmt ? fmt.template.replace("{subject}", keywords) : keywords;
+        const finalPrompt = style ? `${body} ${style.suffix}` : body;
         const store = usePromptStudioStore.getState();
         if (!store.current) await store.createProject(`分镜资产-${current.title}`);
-        usePromptStudioStore.getState().addEntry({ input: name, platform: sendPlatform, prompt: finalPrompt, category });
+        usePromptStudioStore.getState().addEntry({ input: name, platform: sendPlatform, prompt: finalPrompt, category, style: style?.label });
         message.success(`「${name}」已发送到提示词工作台（${PLATFORM_LIST.find((p) => p.id === sendPlatform)?.label || sendPlatform}）`);
         setSendPanel(null);
     };
@@ -284,6 +297,12 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                         <Radio key={o.value} value={o.value}>{o.label}</Radio>
                                     ))}
                                 </Radio.Group>
+                            </div>
+                            <div>
+                                <p className="mb-1 text-xs text-stone-500">画面风格</p>
+                                <Select size="small" className="w-full" value={sendStyle} onChange={setSendStyle}
+                                    options={STYLE_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
+                                />
                             </div>
                             <div>
                                 <p className="mb-1 text-xs text-stone-500">目标平台</p>
