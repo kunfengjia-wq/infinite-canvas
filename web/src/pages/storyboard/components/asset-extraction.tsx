@@ -1,6 +1,6 @@
 import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Empty, Input, Popconfirm, Popover, Radio, Select, Tabs, Tooltip } from "antd";
+import { App, Button, Card, Empty, Input, Popconfirm, Radio, Select, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
