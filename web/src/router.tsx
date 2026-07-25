@@ -9,7 +9,9 @@ import ConfigPage from "@/pages/config";
 import HomePage from "@/pages/home";
 import ImagePage from "@/pages/image";
 import NotFound from "@/pages/not-found";
+import PromptStudioPage from "@/pages/prompt-studio";
 import PromptsPage from "@/pages/prompts";
+import StoryboardPage from "@/pages/storyboard";
 import VideoPage from "@/pages/video";
 
 export const router = createBrowserRouter([
@@ -24,6 +26,8 @@ export const router = createBrowserRouter([
             { path: "/", element: <HomePage /> },
             { path: "/image", element: <ImagePage /> },
             { path: "/video", element: <VideoPage /> },
+            { path: "/storyboard", element: <StoryboardPage /> },
+            { path: "/prompt-studio", element: <PromptStudioPage /> },
             { path: "/assets", element: <AssetsPage /> },
             { path: "/prompts", element: <PromptsPage /> },
             { path: "/canvas", element: <CanvasPage /> },

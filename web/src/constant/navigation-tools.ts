@@ -1,4 +1,4 @@
-import { FileText, ImagePlus, Images, Maximize2, Settings2, Video } from "lucide-react";
+import { Clapperboard, FileText, ImagePlus, Images, Maximize2, Settings2, Video, Wand2 } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -15,6 +15,16 @@ export const navigationTools = [
         slug: "video",
         label: "视频创作台",
         icon: Video,
+    },
+    {
+        slug: "storyboard",
+        label: "分镜工作台",
+        icon: Clapperboard,
+    },
+    {
+        slug: "prompt-studio",
+        label: "提示词工作台",
+        icon: Wand2,
     },
     {
         slug: "prompts",
