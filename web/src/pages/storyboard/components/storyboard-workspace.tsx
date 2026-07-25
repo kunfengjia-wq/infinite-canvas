@@ -67,7 +67,7 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
         setMaximized((prev) => !prev);
     }, []);
 
-    if (!current) {
+    if (!current && step !== 1) {
         return (
             <div className="flex h-full flex-col items-center justify-center gap-4">
                 <Clapperboard className="size-14 text-stone-300 dark:text-stone-700" />
@@ -90,7 +90,7 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
         }
     };
 
-    const hasShots = current.scenes.some((s) => s.shots.length > 0);
+    const hasShots = current ? current.scenes.some((s) => s.shots.length > 0) : false;
     const wide = maximized || panelWidth >= 600;
 
     return (
