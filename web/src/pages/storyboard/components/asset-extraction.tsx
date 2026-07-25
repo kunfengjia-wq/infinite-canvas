@@ -1,12 +1,14 @@
-import { LoaderCircle, MapPin, Package, Plus, Sparkles, Trash2, User, Wrench } from "lucide-react";
+import { LoaderCircle, MapPin, Package, Plus, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Empty, Input, Popconfirm, Tabs } from "antd";
+import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiExtractAssets } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
+import type { PromptCategory } from "@/types/prompt-studio";
 
 export function AssetExtraction({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
@@ -66,6 +68,15 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 
     const total = assets.characters.length + assets.locations.length + assets.props.length + assets.products.length;
 
+    /** 将资产关键词发送到提示词工作台 */
+    const sendToPromptStudio = async (name: string, keywords: string, category: PromptCategory) => {
+        if (!keywords.trim()) { message.warning("该资产没有关键词"); return; }
+        const store = usePromptStudioStore.getState();
+        if (!store.current) await store.createProject(`分镜资产-${current.title}`);
+        usePromptStudioStore.getState().addEntry({ input: name, platform: "all", prompt: keywords, category });
+        message.success(`「${name}」关键词已发送到提示词工作台`);
+    };
+
     return (
         <div className="mx-auto max-w-4xl">
             <div className="mb-6 flex items-center justify-between">
@@ -74,13 +85,24 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                     <p className="mt-1 text-sm text-stone-500">AI 从剧本中提取角色、场景、道具、产品等视觉资产</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
-                        icon={extracting ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                        onClick={handleExtract}
-                        disabled={extracting || processing}
-                    >
-                        {extracting ? "AI 提取中..." : "AI 提取资产"}
-                    </Button>
+                    {total > 0 ? (
+                        <Popconfirm title="重新提取将覆盖当前所有资产" description="已手动修改的内容会丢失，确定？" onConfirm={handleExtract} okText="重新提取" cancelText="取消">
+                            <Button
+                                icon={extracting ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                                disabled={extracting || processing}
+                            >
+                                {extracting ? "AI 提取中..." : "重新提取（覆盖）"}
+                            </Button>
+                        </Popconfirm>
+                    ) : (
+                        <Button
+                            icon={extracting ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                            onClick={handleExtract}
+                            disabled={extracting || processing}
+                        >
+                            {extracting ? "AI 提取中..." : "AI 提取资产"}
+                        </Button>
+                    )}
                     <Button type="primary" disabled={total === 0} onClick={handleConfirm}>
                         确认资产（{total} 项）→ 下一步
                     </Button>
@@ -98,6 +120,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.characters}
                                 onAdd={() => setAssets({ ...assets, characters: [...assets.characters, { id: nanoid(), name: "新角色", appearance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, characters: assets.characters.filter((c) => c.id !== id) })}
+                                onSend={(c) => void sendToPromptStudio(c.name, c.keywords, "character")}
                                 render={(c: CharacterAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={c.name} onChange={(e) => updateCharacter(c.id, { name: e.target.value })} placeholder="角色名" addonBefore="名称" />
@@ -119,6 +142,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.locations}
                                 onAdd={() => setAssets({ ...assets, locations: [...assets.locations, { id: nanoid(), name: "新场景", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, locations: assets.locations.filter((l) => l.id !== id) })}
+                                onSend={(l) => void sendToPromptStudio(l.name, l.keywords, "scene")}
                                 render={(l: LocationAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={l.name} onChange={(e) => updateLocation(l.id, { name: e.target.value })} placeholder="场景名" addonBefore="名称" />
@@ -142,6 +166,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.props}
                                 onAdd={() => setAssets({ ...assets, props: [...assets.props, { id: nanoid(), name: "新道具", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, props: assets.props.filter((p) => p.id !== id) })}
+                                onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "prop")}
                                 render={(p: PropAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={p.name} onChange={(e) => updateProp(p.id, { name: e.target.value })} placeholder="道具名" addonBefore="名称" />
@@ -162,6 +187,7 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.products}
                                 onAdd={() => setAssets({ ...assets, products: [...assets.products, { id: nanoid(), name: "新产品", appearance: "", significance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, products: assets.products.filter((p) => p.id !== id) })}
+                                onSend={(p) => void sendToPromptStudio(p.name, p.keywords, "product")}
                                 render={(p: ProductAsset) => (
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Input size="small" value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} placeholder="产品名" addonBefore="名称" />
@@ -182,11 +208,12 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 }
 
 // ─── 通用资产卡片列表 ───
-function AssetCardList<T extends { id: string; name: string }>({ items, empty, onAdd, onRemove, render }: {
+function AssetCardList<T extends { id: string; name: string; keywords: string }>({ items, empty, onAdd, onRemove, onSend, render }: {
     items: T[];
     empty: string;
     onAdd: () => void;
     onRemove: (id: string) => void;
+    onSend?: (item: T) => void;
     render: (item: T) => React.ReactNode;
 }) {
     if (items.length === 0) {
@@ -204,9 +231,16 @@ function AssetCardList<T extends { id: string; name: string }>({ items, empty, o
             {items.map((item) => (
                 <Card key={item.id} size="small" className="group bg-stone-50 dark:bg-stone-900/50" title={<span className="text-sm font-medium">{item.name}</span>}
                     extra={
-                        <Popconfirm title="删除此资产？" onConfirm={() => onRemove(item.id)} okText="删除" cancelText="取消">
-                            <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
-                        </Popconfirm>
+                        <div className="flex items-center gap-0.5">
+                            {onSend && (
+                                <Tooltip title="发送关键词到提示词工作台">
+                                    <Button type="text" size="small" icon={<Send className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" onClick={() => onSend(item)} />
+                                </Tooltip>
+                            )}
+                            <Popconfirm title="删除此资产？" onConfirm={() => onRemove(item.id)} okText="删除" cancelText="取消">
+                                <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
+                            </Popconfirm>
+                        </div>
                     }
                 >
                     {render(item)}
