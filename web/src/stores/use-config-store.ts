@@ -62,32 +62,32 @@ export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+const DASHSCOPE_BASE_URL = "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com/compatible-mode";
+const DASHSCOPE_API_KEY = "sk-ws-H.EIMDIRE.FfnB.MEUCIQCN-NDrTCFEuXFEewMRfnOTq6BwAwADzMltBbHWH4uIVgIgceldpHqX3NYS1UqGelnZ30Shu3sNUk5y3b75EsVJ_EQ";
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
-    baseUrl: OPENAI_BASE_URL,
-    apiKey: "",
+    baseUrl: DASHSCOPE_BASE_URL,
+    apiKey: DASHSCOPE_API_KEY,
     apiFormat: "openai",
     channels: [
         {
             id: "default",
-            name: "默认渠道",
-            baseUrl: OPENAI_BASE_URL,
-            apiKey: "",
+            name: "百炼",
+            baseUrl: DASHSCOPE_BASE_URL,
+            apiKey: DASHSCOPE_API_KEY,
             apiFormat: "openai",
             models: [
-                { name: "gpt-image-2", capability: "image" },
-                { name: "grok-imagine-video", capability: "video" },
-                { name: "gpt-5.5", capability: "text" },
-                { name: "gpt-4o-mini-tts", capability: "audio" },
+                { name: "qwen-image-2.0", capability: "image" },
+                { name: "qwen3.7-flash", capability: "text" },
             ],
         },
     ],
-    model: "default::gpt-image-2",
-    imageModel: "default::gpt-image-2",
-    videoModel: "default::grok-imagine-video",
-    textModel: "default::gpt-5.5",
-    audioModel: "default::gpt-4o-mini-tts",
+    model: "default::qwen-image-2.0",
+    imageModel: "default::qwen-image-2.0",
+    videoModel: "",
+    textModel: "default::qwen3.7-flash",
+    audioModel: "",
     audioVoice: "alloy",
     audioFormat: "mp3",
     audioSpeed: "1",
@@ -97,12 +97,12 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "true",
     videoWatermark: "false",
     systemPrompt: "",
-    models: ["default::gpt-image-2", "default::grok-imagine-video", "default::gpt-5.5", "default::gpt-4o-mini-tts"],
+    models: ["default::qwen-image-2.0", "default::qwen3.7-flash"],
     quality: "auto",
-    size: "1:1",
+    size: "auto",
     background: "",
     count: "1",
-    canvasImageCount: "3",
+    canvasImageCount: "1",
 };
 
 export const defaultWebdavSyncConfig: WebdavSyncConfig = {

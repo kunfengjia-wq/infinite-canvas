@@ -444,6 +444,9 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
         body: JSON.stringify({ ...body, stream: true }),
         signal: options?.signal,
     });
+    if (response.status === 404) {
+        throw { status: 404, message: "responses endpoint not supported" };
+    }
     if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
     if (!response.body) {
         const payload = (await response.json()) as ResponseApiPayload;
@@ -466,6 +469,86 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
     validateResponsePayload(state.payload);
     const result = parseToolResponse(state.payload);
     return { ...result, content: state.text || result.content };
+}
+
+/** 降级：通过 /chat/completions 流式调用（兼容 DeepSeek/Qwen/百炼等） */
+async function requestChatCompletionsStreaming(config: AiConfig, messages: ResponseInputMessage[], onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {
+    const chatMessages = messages
+        .filter((m): m is Extract<ResponseInputMessage, { role: string }> => !("type" in m))
+        .map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content : m.content.map((c: { text?: string }) => c.text || "").join("") }));
+    const response = await fetch(aiApiUrl(config, "/chat/completions"), {
+        method: "POST",
+        headers: { ...aiHeaders(config, "application/json"), Accept: "text/event-stream" },
+        body: JSON.stringify({ model: config.model, messages: chatMessages, stream: true }),
+        signal: options?.signal,
+    });
+    if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
+    if (!response.body) {
+        const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+        return { content: payload.choices?.[0]?.message?.content || "", toolCalls: [] };
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const data = trimmed.slice(6);
+            if (data === "[DONE]") break;
+            try {
+                const chunk = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
+                const delta = chunk.choices?.[0]?.delta?.content;
+                if (delta) { text += delta; onDelta?.(delta); }
+            } catch { /* skip malformed chunk */ }
+        }
+    }
+    return { content: text, toolCalls: [] };
+}
+
+/** 降级：通过 /chat/completions 调用百炼生图模型（qwen-image 系列） */
+async function requestImageViaDashScope(config: AiConfig, prompt: string, size?: string, options?: RequestOptions) {
+    const messages: Array<{ role: string; content: Array<{ type: string; text: string }> }> = [
+        { role: "user", content: [{ type: "text", text: size ? `${prompt}\n\n[图片尺寸: ${size}]` : prompt }] },
+    ];
+    const response = await axios.post(
+        aiApiUrl(config, "/chat/completions"),
+        { model: config.model, messages, stream: false },
+        { headers: aiHeaders(config, "application/json"), signal: options?.signal },
+    );
+    const payload = response.data as Record<string, unknown>;
+    const output = payload.output as Record<string, unknown> | undefined;
+    const choices = (payload.choices || output?.choices) as Array<{ message?: { content?: unknown } }> | undefined;
+    const content = choices?.[0]?.message?.content;
+    const urls = extractImageUrls(content);
+    if (!urls.length) throw new Error("生图模型未返回图片，请检查模型是否支持图片生成");
+    return urls.map((dataUrl) => ({ id: nanoid(), dataUrl }));
+}
+
+function extractImageUrls(content: unknown): string[] {
+    if (!content) return [];
+    if (typeof content === "string") {
+        const mdImages = [...content.matchAll(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/g)].map((m) => m[1]);
+        if (mdImages.length) return mdImages;
+        const urlMatches = [...content.matchAll(/(https?:\/\/[^\s"'<>]+\.(?:png|jpg|jpeg|webp|gif)[^\s"'<>]*)/gi)].map((m) => m[1]);
+        return urlMatches;
+    }
+    if (Array.isArray(content)) {
+        return content
+            .map((item: Record<string, unknown>) => {
+                if (typeof item.image === "string" && item.image) return item.image;
+                if (item.type === "image_url" && item.image_url) return (item.image_url as { url?: string }).url || "";
+                return "";
+            })
+            .filter(Boolean);
+    }
+    return [];
 }
 
 function toGeminiBody(config: AiConfig, messages: ResponseInputMessage[], extra?: Record<string, unknown>) {
@@ -699,11 +782,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                 model: requestConfig.model,
                 prompt: withSystemPrompt(requestConfig, prompt),
                 n,
-                ...(quality ? { quality } : {}),
                 ...(requestSize ? { size: requestSize } : {}),
-                ...(background ? { background } : {}),
-                response_format: "b64_json",
-                output_format: IMAGE_OUTPUT_FORMAT,
             },
             {
                 headers: aiHeaders(requestConfig, "application/json"),
@@ -713,6 +792,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         const images = parseImagePayload(response.data);
         return images;
     } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+            return await requestImageViaDashScope(requestConfig, prompt, requestSize, options);
+        }
         throw new Error(readAxiosError(error, "请求失败"));
     }
 }
@@ -801,6 +883,7 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
+    const inputMessages = withSystemMessage(requestConfig, messages);
     try {
         if (requestConfig.apiFormat === "gemini") {
             const answer = (await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages), onDelta, options)).content || "没有返回内容";
@@ -809,12 +892,17 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
         }
         const answer = (await requestStreamingResponse(requestConfig, {
             model: requestConfig.model,
-            input: toResponseInput(withSystemMessage(requestConfig, messages)),
+            input: toResponseInput(inputMessages),
         }, onDelta, options)).content || "没有返回内容";
         if (answer === "没有返回内容") onDelta(answer);
         return answer;
-    } catch (error) {
-        throw new Error(readAxiosError(error, "请求失败"));
+    } catch (fallbackError: unknown) {
+        if (fallbackError && typeof fallbackError === "object" && "status" in fallbackError && (fallbackError as { status: number }).status === 404) {
+            const answer = (await requestChatCompletionsStreaming(requestConfig, inputMessages, onDelta, options)).content || "没有返回内容";
+            if (answer === "没有返回内容") onDelta(answer);
+            return answer;
+        }
+        throw new Error(readAxiosError(fallbackError, "请求失败"));
     }
 }
 
