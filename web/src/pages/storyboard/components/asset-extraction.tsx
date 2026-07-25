@@ -1,15 +1,17 @@
-import { LoaderCircle, Plus, Sparkles, Trash2, User, MapPin, Package } from "lucide-react";
+import { Copy, LoaderCircle, Plus, Sparkles, Trash2, User, MapPin, Package } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Input, Popconfirm, Tabs, Tag } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiExtractAssets } from "@/services/storyboard-ai";
+import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, PropAsset } from "@/types/storyboard";
 
 export function AssetExtraction({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
+    const copyText = useCopyText();
     const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
     const [aiOutput, setAiOutput] = useState("");
 
@@ -112,12 +114,25 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 <Popconfirm title="删除此角色？" onConfirm={() => removeCharacter(char.id)} okText="删除" cancelText="取消">
                                     <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
                                 </Popconfirm>
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<Copy className="size-3.5" />}
+                                    className="opacity-0 transition group-hover:opacity-100"
+                                    title="复制角色信息"
+                                    onClick={() => copyText(`${char.name}\n外貌：${char.appearance}${char.costume ? `\n服装：${char.costume}` : ""}\n关键词：${char.keywords}`, "角色已复制")}
+                                />
                             </div>
                         </Card>
                     ))}
                     <Button size="small" type="dashed" icon={<Plus className="size-3.5" />} onClick={addCharacter} block>
                         添加角色
                     </Button>
+                    {characters.length > 0 && (
+                        <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => copyText(characters.map((c) => `${c.name}：${c.appearance}${c.costume ? `，服装：${c.costume}` : ""}\n关键词：${c.keywords}`).join("\n\n"), "已复制全部角色")} block>
+                            复制全部角色
+                        </Button>
+                    )}
                 </div>
             ),
         },
@@ -149,12 +164,25 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 <Popconfirm title="删除此场景？" onConfirm={() => removeLocation(loc.id)} okText="删除" cancelText="取消">
                                     <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
                                 </Popconfirm>
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<Copy className="size-3.5" />}
+                                    className="opacity-0 transition group-hover:opacity-100"
+                                    title="复制场景信息"
+                                    onClick={() => copyText(`${loc.name}\n描述：${loc.description}${loc.timeOfDay ? `\n时间：${loc.timeOfDay}` : ""}${loc.lighting ? `\n光线：${loc.lighting}` : ""}\n关键词：${loc.keywords}`, "场景已复制")}
+                                />
                             </div>
                         </Card>
                     ))}
                     <Button size="small" type="dashed" icon={<Plus className="size-3.5" />} onClick={addLocation} block>
                         添加场景
                     </Button>
+                    {locations.length > 0 && (
+                        <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => copyText(locations.map((l) => `${l.name}：${l.description}${l.timeOfDay ? `，时间：${l.timeOfDay}` : ""}${l.lighting ? `，光线：${l.lighting}` : ""}\n关键词：${l.keywords}`).join("\n\n"), "已复制全部场景")} block>
+                            复制全部场景
+                        </Button>
+                    )}
                 </div>
             ),
         },
@@ -185,12 +213,25 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 <Popconfirm title="删除此道具？" onConfirm={() => removeProp(prop.id)} okText="删除" cancelText="取消">
                                     <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" />
                                 </Popconfirm>
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<Copy className="size-3.5" />}
+                                    className="opacity-0 transition group-hover:opacity-100"
+                                    title="复制道具信息"
+                                    onClick={() => copyText(`${prop.name}\n描述：${prop.description}${prop.significance ? `\n意义：${prop.significance}` : ""}\n关键词：${prop.keywords}`, "道具已复制")}
+                                />
                             </div>
                         </Card>
                     ))}
                     <Button size="small" type="dashed" icon={<Plus className="size-3.5" />} onClick={addProp} block>
                         添加道具
                     </Button>
+                    {props.length > 0 && (
+                        <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => copyText(props.map((p) => `${p.name}：${p.description}${p.significance ? `（${p.significance}）` : ""}\n关键词：${p.keywords}`).join("\n\n"), "已复制全部道具")} block>
+                            复制全部道具
+                        </Button>
+                    )}
                 </div>
             ),
         },

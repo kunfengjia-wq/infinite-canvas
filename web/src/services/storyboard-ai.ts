@@ -40,10 +40,11 @@ const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师。用户会�
 1. 每个场景代表一个连续的时空单元（同一地点、同一时间段）
 2. 场景标题格式："第N场：地点/时间"（如"第1场：教室-白天"）
 3. summary 用1-2句话概括该场景的核心内容
-4. 合理拆分，不要过细（一般3-15个场景）
+4. scriptExcerpt 必须包含该场景对应的原始剧本文本（完整复制，不要改写），包括所有对白和动作描写
+5. 合理拆分，不要过细（一般3-15个场景）
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
-[{"title": "第1场：教室-白天", "summary": "老师宣布考试成绩，主角紧张地等待"}]`;
+[{"title": "第1场：教室-白天", "summary": "老师宣布考试成绩，主角紧张地等待", "scriptExcerpt": "老师站在讲台上...小明紧张地低下头..."}]`;
 
 export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<AiSceneResult[]> {
     const messages: AiTextMessage[] = [
@@ -62,7 +63,7 @@ const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你�
 - shotType: 景别（远景/全景/中景/近景/特写/大特写）
 - angle: 角度（平视/俯视/仰视/斜角/鸟瞰/低角度）
 - action: 画面中的动作描述（具体、可视化）
-- dialogue: 对白（可选，没有则为空字符串）
+- dialogue: 该镜头中角色说的台词（必须从剧本原文中提取，保留原始措辞，格式为"角色名：台词内容"。如果该镜头时间范围内有角色说话，必须填写，不可省略。没有对白则为空字符串）
 - duration: 预估时长（如"3s"、"5s"）
 - mood: 情绪氛围（如"紧张"、"温馨"、"压抑"）
 
@@ -71,9 +72,10 @@ const SHOT_GENERATOR_SYSTEM = `你是一位专业的分镜师。用户会给你�
 2. 注意景别和角度的变化节奏（不要全是中景平视）
 3. action 描述要具体可视化，像在给摄影师下指令
 4. 结合角色资产信息，确保动作描述与角色外貌/性格一致
+5. 【重要】剧本中的每一句对白都必须被分配到某个镜头的 dialogue 字段中，绝对不能遗漏任何台词
 
 严格以 JSON 数组格式输出，不要输出任何其他文字：
-[{"shotType":"中景","angle":"平视","action":"主角推开门走进教室","dialogue":"","duration":"3s","mood":"紧张"}]`;
+[{"shotType":"中景","angle":"平视","action":"主角推开门走进教室","dialogue":"老师：这次考试成绩出来了","duration":"3s","mood":"紧张"}]`;
 
 export async function aiGenerateShots(config: AiConfig, sceneTitle: string, sceneSummary: string, script: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<AiShotResult[]> {
     const userContent = [

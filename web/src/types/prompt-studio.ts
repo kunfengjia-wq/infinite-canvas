@@ -8,12 +8,21 @@ export type PromptPlatform =
     | "midjourney"
     | "stable-diffusion"
     | "comfyui"
+    | "flux"
+    | "ideogram"
+    | "leonardo"
+    | "gpt-image"
+    | "dall-e"
+    | "wanx"
     | "kling"
     | "runway"
     | "seedance"
     | "pika"
-    | "dall-e"
-    | "wanx";
+    | "sora"
+    | "veo"
+    | "hailuo"
+    | "vidu"
+    | "luma";
 
 /** 平台元信息 */
 export type PlatformMeta = {
@@ -28,15 +37,26 @@ export type PlatformMeta = {
 
 /** 所有平台元信息 */
 export const PLATFORM_LIST: PlatformMeta[] = [
+    // ─── 图片平台 ───
     { id: "midjourney", label: "Midjourney", category: "image", description: "自然语言描述 + 参数后缀", supportsNegative: false, supportsWeight: true, parameterHints: ["--ar 16:9", "--v 6", "--style raw", "--s 250"] },
     { id: "stable-diffusion", label: "Stable Diffusion", category: "image", description: "逗号分隔标签 + 权重语法", supportsNegative: true, supportsWeight: true, parameterHints: ["(tag:1.2)", "Steps: 30", "CFG: 7"] },
     { id: "comfyui", label: "ComfyUI", category: "image", description: "SD 兼容 + 工作流节点", supportsNegative: true, supportsWeight: true, parameterHints: ["(tag:1.2)", "CLIP skip: 2"] },
+    { id: "flux", label: "Flux", category: "image", description: "自然语言 + 标签混合，高质量开源模型", supportsNegative: true, supportsWeight: true, parameterHints: ["(tag:1.2)", "guidance: 3.5"] },
+    { id: "ideogram", label: "Ideogram", category: "image", description: "自然语言，擅长文字渲染与设计感", supportsNegative: false, supportsWeight: false, parameterHints: ["aspect ratio", "style"] },
+    { id: "leonardo", label: "Leonardo AI", category: "image", description: "标签 + 自然语言，游戏/概念艺术", supportsNegative: true, supportsWeight: true, parameterHints: ["(tag:1.2)", "guidance scale"] },
+    { id: "gpt-image", label: "GPT Image", category: "image", description: "纯自然语言段落，OpenAI 最新生图", supportsNegative: false, supportsWeight: false, parameterHints: ["size: 1536x1024", "quality: high"] },
+    { id: "dall-e", label: "DALL-E", category: "image", description: "自然语言段落，简洁直接", supportsNegative: false, supportsWeight: false, parameterHints: ["size: 1024x1024"] },
+    { id: "wanx", label: "通义万相", category: "image", description: "中文自然语言描述", supportsNegative: true, supportsWeight: false, parameterHints: ["尺寸", "风格"] },
+    // ─── 视频平台 ───
     { id: "kling", label: "可灵 Kling", category: "video", description: "视频提示词，强调运动与镜头", supportsNegative: false, supportsWeight: false, parameterHints: ["时长 5s/10s", "运动幅度"] },
     { id: "runway", label: "Runway", category: "video", description: "视频生成，自然语言 + 镜头语言", supportsNegative: false, supportsWeight: false, parameterHints: ["duration", "motion"] },
     { id: "seedance", label: "Seedance", category: "video", description: "舞蹈/动作视频，强调节奏与动态", supportsNegative: false, supportsWeight: false, parameterHints: ["时长", "风格"] },
     { id: "pika", label: "Pika", category: "video", description: "短视频生成，简洁描述", supportsNegative: true, supportsWeight: false, parameterHints: ["-motion 2", "-ar 16:9"] },
-    { id: "dall-e", label: "DALL-E", category: "image", description: "自然语言段落，简洁直接", supportsNegative: false, supportsWeight: false, parameterHints: ["size: 1024x1024"] },
-    { id: "wanx", label: "通义万相", category: "image", description: "中文自然语言描述", supportsNegative: true, supportsWeight: false, parameterHints: ["尺寸", "风格"] },
+    { id: "sora", label: "Sora", category: "video", description: "OpenAI 视频生成，电影级自然语言", supportsNegative: false, supportsWeight: false, parameterHints: ["duration", "aspect ratio"] },
+    { id: "veo", label: "Google Veo", category: "video", description: "物理真实感视频，强调光影与材质", supportsNegative: false, supportsWeight: false, parameterHints: ["duration", "resolution"] },
+    { id: "hailuo", label: "海螺 Hailuo", category: "video", description: "MiniMax 视频生成，中英文运动描述", supportsNegative: false, supportsWeight: false, parameterHints: ["时长", "运动"] },
+    { id: "vidu", label: "Vidu", category: "video", description: "生数科技视频生成，简洁中英文描述", supportsNegative: false, supportsWeight: false, parameterHints: ["时长 4s/8s", "风格"] },
+    { id: "luma", label: "Luma", category: "video", description: "Dream Machine，运动 + 风格描述", supportsNegative: false, supportsWeight: false, parameterHints: ["duration", "loop"] },
 ];
 
 /** 风格预设 */

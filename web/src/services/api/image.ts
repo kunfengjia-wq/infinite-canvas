@@ -472,15 +472,21 @@ async function requestStreamingResponse(config: AiConfig, body: Record<string, u
 }
 
 /** Chat Completions 兼容接口 (DeepSeek / Qwen / 大多数 OpenAI 兼容供应商) */
-function toChatMessages(messages: ResponseInputMessage[]): Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> {
-    return messages.flatMap((message) => {
-        if ("type" in message) return [];
-        if (message.role === "tool") return [];
+type ChatMessage = { role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> };
+function toChatMessages(messages: ResponseInputMessage[]): ChatMessage[] {
+    const result: ChatMessage[] = [];
+    for (const message of messages) {
+        if ("type" in message) continue;
+        if (message.role === "tool") continue;
         const content = message.content;
-        if (!Array.isArray(content)) return [{ role: message.role, content: String(content || "") }];
+        if (!Array.isArray(content)) {
+            result.push({ role: message.role, content: String(content || "") });
+            continue;
+        }
         const parts = content.map((item) => (item.type === "text" ? { type: "text" as const, text: item.text } : { type: "image_url" as const, image_url: { url: item.image_url.url } }));
-        return [{ role: message.role, content: parts }];
-    });
+        result.push({ role: message.role, content: parts });
+    }
+    return result;
 }
 
 async function requestChatCompletionsStreaming(config: AiConfig, messages: ResponseInputMessage[], onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {

@@ -1,15 +1,17 @@
-import { LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Copy, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Input, Popconfirm } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiSplitScenes } from "@/services/storyboard-ai";
+import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Scene } from "@/types/storyboard";
 
 export function SceneList({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
+    const copyText = useCopyText();
     const { current, processing, setProcessing, setScenes, updateScene, removeScene, addScene, confirmScenes, saveCurrent } = useStoryboardStore();
     const [aiOutput, setAiOutput] = useState("");
 
@@ -26,6 +28,7 @@ export function SceneList({ config, onError }: { config: AiConfig; onError: (msg
                 index: i,
                 title: r.title,
                 summary: r.summary,
+                scriptExcerpt: r.scriptExcerpt || undefined,
                 shots: [],
                 confirmed: false,
             }));
@@ -96,6 +99,14 @@ export function SceneList({ config, onError }: { config: AiConfig; onError: (msg
                             <Popconfirm title="删除此场景？" onConfirm={() => removeScene(scene.id)} okText="删除" cancelText="取消">
                                 <Button type="text" danger size="small" icon={<Trash2 className="size-4" />} className="opacity-0 transition group-hover:opacity-100" />
                             </Popconfirm>
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<Copy className="size-4" />}
+                                className="opacity-0 transition group-hover:opacity-100"
+                                title="复制场景信息"
+                                onClick={() => copyText(`${scene.title}\n${scene.summary}${scene.scriptExcerpt ? `\n\n剧本片段：\n${scene.scriptExcerpt}` : ""}`, "场景已复制")}
+                            />
                         </div>
                     </Card>
                 ))}

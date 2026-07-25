@@ -1,68 +1,71 @@
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { PLATFORM_LIST } from "@/types/prompt-studio";
 
-export function PlatformSelector() {
-    const { selectedPlatform, setPlatform } = usePromptStudioStore();
+export function PlatformSelector({ compact = false }: { compact?: boolean }) {
+    const { selectedPlatforms, togglePlatform } = usePromptStudioStore();
 
     const imagePlatforms = PLATFORM_LIST.filter((p) => p.category === "image");
     const videoPlatforms = PLATFORM_LIST.filter((p) => p.category === "video");
 
+    const renderPlatformButton = (p: (typeof PLATFORM_LIST)[number]) => {
+        const isSelected = selectedPlatforms.includes(p.id);
+        const colorClass = p.category === "video"
+            ? isSelected
+                ? "border-purple-500 bg-purple-50 text-purple-700 dark:border-purple-400 dark:bg-purple-950 dark:text-purple-300"
+                : "border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-900"
+            : isSelected
+              ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-300"
+              : "border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-900";
+
+        return (
+            <button
+                key={p.id}
+                type="button"
+                onClick={() => togglePlatform(p.id)}
+                className={cn("relative rounded-md border transition", compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm", colorClass)}
+            >
+                {isSelected && <Check className={cn("absolute rounded-full bg-current p-0.5 text-white dark:text-stone-900", compact ? "-left-1 -top-1 size-3" : "-left-1 -top-1 size-3.5")} />}
+                {p.label}
+            </button>
+        );
+    };
+
+    if (compact) {
+        return (
+            <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-stone-400">平台</span>
+                {imagePlatforms.map(renderPlatformButton)}
+                <span className="mx-1 h-3 w-px bg-stone-200 dark:bg-stone-700" />
+                {videoPlatforms.map(renderPlatformButton)}
+            </div>
+        );
+    }
+
     return (
         <section>
-            <h3 className="mb-3 text-sm font-medium text-stone-600 dark:text-stone-300">目标平台</h3>
+            <h3 className="mb-1 text-sm font-medium text-stone-600 dark:text-stone-300">目标平台</h3>
+            <p className="mb-3 text-xs text-stone-400">可多选，批量生成时将为每个选中平台分别生成</p>
             <div className="space-y-3">
                 <div>
                     <span className="mb-1.5 block text-xs text-stone-400">图片平台</span>
                     <div className="flex flex-wrap gap-2">
-                        {imagePlatforms.map((p) => (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => setPlatform(p.id)}
-                                className={cn(
-                                    "rounded-md border px-3 py-1.5 text-sm transition",
-                                    selectedPlatform === p.id
-                                        ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-300"
-                                        : "border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-900",
-                                )}
-                            >
-                                {p.label}
-                            </button>
-                        ))}
+                        {imagePlatforms.map(renderPlatformButton)}
                     </div>
                 </div>
                 <div>
                     <span className="mb-1.5 block text-xs text-stone-400">视频平台</span>
                     <div className="flex flex-wrap gap-2">
-                        {videoPlatforms.map((p) => (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => setPlatform(p.id)}
-                                className={cn(
-                                    "rounded-md border px-3 py-1.5 text-sm transition",
-                                    selectedPlatform === p.id
-                                        ? "border-purple-500 bg-purple-50 text-purple-700 dark:border-purple-400 dark:bg-purple-950 dark:text-purple-300"
-                                        : "border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-900",
-                                )}
-                            >
-                                {p.label}
-                            </button>
-                        ))}
+                        {videoPlatforms.map(renderPlatformButton)}
                     </div>
                 </div>
             </div>
-            {(() => {
-                const meta = PLATFORM_LIST.find((p) => p.id === selectedPlatform);
-                if (!meta) return null;
-                return (
-                    <p className="mt-2 text-xs text-stone-400">
-                        {meta.description}
-                        {meta.parameterHints.length > 0 && <span className="ml-2 text-stone-300 dark:text-stone-600">| {meta.parameterHints.join("  ")}</span>}
-                    </p>
-                );
-            })()}
+            {selectedPlatforms.length > 0 && (
+                <p className="mt-2 text-xs text-stone-400">
+                    已选 {selectedPlatforms.length} 个平台：{selectedPlatforms.map((id) => PLATFORM_LIST.find((p) => p.id === id)?.label || id).join("、")}
+                </p>
+            )}
         </section>
     );
 }

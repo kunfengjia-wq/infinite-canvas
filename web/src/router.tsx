@@ -1,4 +1,4 @@
-import { createBrowserRouter, Outlet } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 
 import { AnalyticsTracker } from "@/components/layout/analytics-tracker";
 import UserLayout from "@/layouts/user-layout";
@@ -9,9 +9,8 @@ import ConfigPage from "@/pages/config";
 import HomePage from "@/pages/home";
 import ImagePage from "@/pages/image";
 import NotFound from "@/pages/not-found";
-import PromptStudioPage from "@/pages/prompt-studio";
 import PromptsPage from "@/pages/prompts";
-import StoryboardPage from "@/pages/storyboard";
+import StudioPage from "@/pages/studio";
 import VideoPage from "@/pages/video";
 
 export const router = createBrowserRouter([
@@ -26,8 +25,9 @@ export const router = createBrowserRouter([
             { path: "/", element: <HomePage /> },
             { path: "/image", element: <ImagePage /> },
             { path: "/video", element: <VideoPage /> },
-            { path: "/storyboard", element: <StoryboardPage /> },
-            { path: "/prompt-studio", element: <PromptStudioPage /> },
+            { path: "/studio", element: <StudioPage /> },
+            { path: "/storyboard", element: <Navigate to="/studio" replace /> },
+            { path: "/prompt-studio", element: <Navigate to="/studio" replace /> },
             { path: "/assets", element: <AssetsPage /> },
             { path: "/prompts", element: <PromptsPage /> },
             { path: "/canvas", element: <CanvasPage /> },

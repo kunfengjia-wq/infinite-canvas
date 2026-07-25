@@ -1,4 +1,4 @@
-import { LoaderCircle, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Input, Select } from "antd";
 
@@ -7,12 +7,13 @@ import { aiGeneratePrompt } from "@/services/prompt-studio-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import { PROMPT_CATEGORIES, type PromptCategory } from "@/types/prompt-studio";
 
-export function InputPanel({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
+export function InputPanel({ config, onError, collapsible = false }: { config: AiConfig; onError: (msg: string) => void; collapsible?: boolean }) {
     const { message } = App.useApp();
     const { selectedPlatform, selectedStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
     const [input, setInput] = useState("");
     const [category, setCategory] = useState<PromptCategory>("general");
     const [streamText, setStreamText] = useState("");
+    const [expanded, setExpanded] = useState(!collapsible);
 
     const handleGenerate = async () => {
         if (!input.trim()) {
@@ -37,9 +38,29 @@ export function InputPanel({ config, onError }: { config: AiConfig; onError: (ms
         }
     };
 
+    if (collapsible && !expanded) {
+        return (
+            <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="flex w-full items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-left text-sm text-stone-500 transition hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-900"
+            >
+                <ChevronRight className="size-3.5" />
+                手动输入描述
+            </button>
+        );
+    }
+
     return (
         <section>
-            <h3 className="mb-3 text-sm font-medium text-stone-600 dark:text-stone-300">输入描述</h3>
+            <div className="mb-3 flex items-center gap-2">
+                {collapsible && (
+                    <button type="button" onClick={() => setExpanded(false)} className="text-stone-400 transition hover:text-stone-600">
+                        <ChevronDown className="size-3.5" />
+                    </button>
+                )}
+                <h3 className="text-sm font-medium text-stone-600 dark:text-stone-300">输入描述</h3>
+            </div>
             <div className="space-y-3">
                 <div className="flex items-center gap-3">
                     <Select

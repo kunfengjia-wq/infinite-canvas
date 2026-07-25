@@ -9,7 +9,7 @@ import { useEffectiveConfig, useConfigStore } from "@/stores/use-config-store";
 import { InputPanel } from "./components/input-panel";
 import { PlatformSelector } from "./components/platform-selector";
 import { PromptResult } from "./components/prompt-result";
-import { BatchPanel } from "./components/batch-panel";
+import { StoryboardSourcePanel } from "./components/storyboard-source-panel";
 import { StylePresets } from "./components/style-presets";
 import { ExportBar } from "./components/export-bar";
 import { PromptProjectSidebar } from "./components/project-sidebar";
@@ -70,8 +70,10 @@ export default function PromptStudioPage() {
                             {/* 输入区 */}
                             <InputPanel config={aiConfig} onError={(msg) => message.error(msg)} />
 
-                            {/* 批量面板（从分镜导入） */}
-                            <BatchPanel config={aiConfig} onError={(msg) => message.error(msg)} />
+                            {/* 分镜素材浏览器 */}
+                            <div className="h-[480px] rounded-lg border border-stone-200 p-3 dark:border-stone-700">
+                                <StoryboardSourcePanel config={aiConfig} onError={(msg) => message.error(msg)} />
+                            </div>
 
                             {/* 生成结果 */}
                             <PromptResult config={aiConfig} onError={(msg) => message.error(msg)} />

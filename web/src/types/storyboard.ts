@@ -32,6 +32,7 @@ export type Scene = {
     index: number;
     title: string;
     summary: string;
+    scriptExcerpt?: string;
     shots: Shot[];
     confirmed: boolean;
 };
@@ -89,6 +90,7 @@ export type PropAsset = {
 export type AiSceneResult = {
     title: string;
     summary: string;
+    scriptExcerpt: string;
 };
 
 /** AI 镜头生成结果 */

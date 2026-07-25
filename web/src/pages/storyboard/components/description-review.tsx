@@ -1,14 +1,16 @@
-import { ArrowRight, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowRight, Copy, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Input, Progress, Tag } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiGenerateVisualDescription, buildAssetsContext } from "@/services/storyboard-ai";
+import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
 
-export function DescriptionReview({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
+export function DescriptionReview({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string) => void }) {
     const { message } = App.useApp();
+    const copyText = useCopyText();
     const navigate = useNavigate();
     const { current, processing, setProcessing, updateShotDescription, confirmDescriptions, saveCurrent } = useStoryboardStore();
     const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -67,7 +69,19 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
 
     const handleExportToPromptStudio = async () => {
         await saveCurrent();
-        navigate(`/prompt-studio?storyboard=${current.id}`);
+        if (onExportToPrompt && current) {
+            onExportToPrompt(current.id);
+        } else {
+            navigate("/studio");
+        }
+    };
+
+    const handleCopyAll = () => {
+        const text = allShots
+            .filter(({ shot }) => shot.visualDescription.trim())
+            .map(({ scene, shot }) => `[${scene.title}] ${shot.shotType}/${shot.angle} - ${shot.action}\n${shot.visualDescription}`)
+            .join("\n\n");
+        copyText(text, "已复制全部描述");
     };
 
     return (
@@ -80,6 +94,9 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <Button icon={<Copy className="size-4" />} disabled={describedCount === 0} onClick={handleCopyAll}>
+                        复制全部
+                    </Button>
                     <Button icon={processing ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />} loading={processing} onClick={handleBatchGenerate}>
                         批量生成描述
                     </Button>
@@ -100,21 +117,31 @@ export function DescriptionReview({ config, onError }: { config: AiConfig; onErr
                         </h3>
                         <div className="space-y-3">
                             {scene.shots.map((shot) => (
-                                <Card key={shot.id} size="small" className="bg-stone-50 dark:bg-stone-900/50">
+                                <Card key={shot.id} size="small" className="group bg-stone-50 dark:bg-stone-900/50">
                                     <div className="mb-2 flex items-center gap-2 text-xs text-stone-400">
                                         <Tag color="geekblue">{shot.shotType}</Tag>
                                         <Tag>{shot.angle}</Tag>
                                         <span>{shot.action}</span>
                                         {shot.mood && <Tag color="blue">{shot.mood}</Tag>}
-                                        <Button
-                                            type="text"
-                                            size="small"
-                                            className="ml-auto"
-                                            icon={regeneratingShot === shot.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                                            disabled={regeneratingShot === shot.id}
-                                            onClick={() => handleRegenerateShot(scene.id, scene.title, scene.summary, shot)}
-                                            title="重新生成此镜头描述"
-                                        />
+                                        <div className="ml-auto flex gap-1">
+                                            <Button
+                                                type="text"
+                                                size="small"
+                                                icon={<Copy className="size-3.5" />}
+                                                className="opacity-0 transition group-hover:opacity-100"
+                                                title="复制此镜头描述"
+                                                onClick={() => copyText(shot.visualDescription, "描述已复制")}
+                                                disabled={!shot.visualDescription.trim()}
+                                            />
+                                            <Button
+                                                type="text"
+                                                size="small"
+                                                icon={regeneratingShot === shot.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                                                disabled={regeneratingShot === shot.id}
+                                                onClick={() => handleRegenerateShot(scene.id, scene.title, scene.summary, shot)}
+                                                title="重新生成此镜头描述"
+                                            />
+                                        </div>
                                     </div>
                                     <Input.TextArea
                                         value={shot.visualDescription}

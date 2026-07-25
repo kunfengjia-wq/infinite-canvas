@@ -13,8 +13,10 @@ type PromptStudioStore = {
     generating: boolean;
     /** 加载状态 */
     loading: boolean;
-    /** 当前选中的平台 */
+    /** 当前选中的平台（单选，用于单条生成） */
     selectedPlatform: PromptPlatform;
+    /** 多选平台列表（用于批量生成） */
+    selectedPlatforms: PromptPlatform[];
     /** 当前选中的风格 */
     selectedStyle: string;
 
@@ -33,6 +35,7 @@ type PromptStudioStore = {
 
     // ─── 面板状态 ───
     setPlatform: (platform: PromptPlatform) => void;
+    togglePlatform: (platform: PromptPlatform) => void;
     setStyle: (style: string) => void;
     setGenerating: (v: boolean) => void;
 };
@@ -47,6 +50,7 @@ export const usePromptStudioStore = create<PromptStudioStore>()((set, get) => ({
     generating: false,
     loading: false,
     selectedPlatform: "midjourney",
+    selectedPlatforms: ["midjourney"],
     selectedStyle: "",
 
     loadProjects: async () => {
@@ -114,7 +118,15 @@ export const usePromptStudioStore = create<PromptStudioStore>()((set, get) => ({
         }),
 
     // ─── 面板 ───
-    setPlatform: (platform) => set({ selectedPlatform: platform }),
+    setPlatform: (platform) => set({ selectedPlatform: platform, selectedPlatforms: [platform] }),
+    togglePlatform: (platform) =>
+        set((state) => {
+            const exists = state.selectedPlatforms.includes(platform);
+            const next = exists ? state.selectedPlatforms.filter((p) => p !== platform) : [...state.selectedPlatforms, platform];
+            // 确保至少选中一个
+            if (next.length === 0) return state;
+            return { selectedPlatforms: next, selectedPlatform: next[next.length - 1] };
+        }),
     setStyle: (style) => set({ selectedStyle: style }),
     setGenerating: (v) => set({ generating: v }),
 }));

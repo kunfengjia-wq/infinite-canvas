@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 import { getStoryboardRepo } from "@/services/db";
+import { useUndoStore } from "@/stores/use-undo-store";
 import type { Scene, Shot, StoryAssets, StoryboardProject, StoryboardStatus, StoryboardStep } from "@/types/storyboard";
 
 type StoryboardStore = {
@@ -43,6 +44,7 @@ type StoryboardStore = {
     updateShot: (sceneId: string, shotId: string, patch: Partial<Shot>) => void;
     removeShot: (sceneId: string, shotId: string) => void;
     addShot: (sceneId: string) => void;
+    reorderShots: (sceneId: string, fromIndex: number, toIndex: number) => void;
     confirmShots: () => void;
 
     // ─── 画面描述（步骤5）───
@@ -56,6 +58,11 @@ function now() {
 
 function createEmptyProject(title: string, script: string): StoryboardProject {
     return { id: nanoid(), title, script, assets: { characters: [], locations: [], props: [] }, scenes: [], status: "draft", createdAt: now(), updatedAt: now() };
+}
+
+/** 在变更前推入快照（带 opKey 合并） */
+function pushUndo(current: StoryboardProject | null, opKey?: string) {
+    if (current) useUndoStore.getState().push(current, opKey);
 }
 
 export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
@@ -74,6 +81,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     createProject: async (title, script) => {
         const project = createEmptyProject(title, script);
         await getStoryboardRepo().save(project);
+        useUndoStore.getState().clear();
         set((state) => ({ projects: [project, ...state.projects], current: project, step: 1 }));
         return project.id;
     },
@@ -82,6 +90,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
         const project = await getStoryboardRepo().get(id);
         if (!project) return;
         const stepMap: Record<StoryboardStatus, StoryboardStep> = { draft: 1, assets_confirmed: 3, scenes_confirmed: 4, shots_confirmed: 5, descriptions_confirmed: 5 };
+        useUndoStore.getState().clear();
         set({ current: project, step: stepMap[project.status] ?? 1 });
     },
 
@@ -111,6 +120,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     setAssets: (assets) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, "setAssets");
             return { current: { ...state.current, assets } };
         }),
 
@@ -124,18 +134,21 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     setScenes: (scenes) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, "setScenes");
             return { current: { ...state.current, scenes } };
         }),
 
     updateScene: (sceneId, patch) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, `updateScene:${sceneId}`);
             return { current: { ...state.current, scenes: state.current.scenes.map((s) => (s.id === sceneId ? { ...s, ...patch } : s)) } };
         }),
 
     removeScene: (sceneId) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current);
             const scenes = state.current.scenes.filter((s) => s.id !== sceneId).map((s, i) => ({ ...s, index: i }));
             return { current: { ...state.current, scenes } };
         }),
@@ -143,6 +156,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     addScene: () =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current);
             const newScene: Scene = { id: nanoid(), index: state.current.scenes.length, title: "新场景", summary: "", shots: [], confirmed: false };
             return { current: { ...state.current, scenes: [...state.current.scenes, newScene] } };
         }),
@@ -158,12 +172,14 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     setSceneShots: (sceneId, shots) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, `setSceneShots:${sceneId}`);
             return { current: { ...state.current, scenes: state.current.scenes.map((s) => (s.id === sceneId ? { ...s, shots } : s)) } };
         }),
 
     updateShot: (sceneId, shotId, patch) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, `updateShot:${shotId}`);
             return {
                 current: {
                     ...state.current,
@@ -175,6 +191,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     removeShot: (sceneId, shotId) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current);
             return {
                 current: {
                     ...state.current,
@@ -186,11 +203,30 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     addShot: (sceneId) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current);
             const newShot: Shot = { id: nanoid(), index: 0, shotType: "中景", angle: "平视", action: "", visualDescription: "", confirmed: false };
             return {
                 current: {
                     ...state.current,
                     scenes: state.current.scenes.map((s) => (s.id === sceneId ? { ...s, shots: [...s.shots, { ...newShot, index: s.shots.length }] } : s)),
+                },
+            };
+        }),
+
+    reorderShots: (sceneId, fromIndex, toIndex) =>
+        set((state) => {
+            if (!state.current) return state;
+            pushUndo(state.current);
+            return {
+                current: {
+                    ...state.current,
+                    scenes: state.current.scenes.map((s) => {
+                        if (s.id !== sceneId) return s;
+                        const shots = [...s.shots];
+                        const [moved] = shots.splice(fromIndex, 1);
+                        shots.splice(toIndex, 0, moved);
+                        return { ...s, shots: shots.map((sh, i) => ({ ...sh, index: i })) };
+                    }),
                 },
             };
         }),
@@ -206,6 +242,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     updateShotDescription: (sceneId, shotId, description) =>
         set((state) => {
             if (!state.current) return state;
+            pushUndo(state.current, `desc:${shotId}`);
             return {
                 current: {
                     ...state.current,
