@@ -136,8 +136,9 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 重点描述：运动轨迹、镜头运动、主体动作、场景变化
 3. 包含镜头语言：推/拉/摇/移/跟/升/降
 4. 描述时间维度上的变化（开始→过程→结束）
-5. 80-200字为佳
-6. 输出纯提示词文本，不要解释`,
+5. 如输入含对白/台词，在提示词中保留台词内容，可灵支持语音合成
+6. 80-200字为佳
+7. 输出纯提示词文本，不要解释`,
 
     runway: `你是 Runway Gen-3 视频提示词专家。将用户描述转化为 Runway 格式的视频提示词。
 
@@ -149,15 +150,20 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 5. 聚焦单一连续动态，简洁有力，50-120 words
 6. 输出纯提示词文本，不要解释`,
 
-    seedance: `你是 Seedance 视频提示词专家。将用户描述转化为 Seedance 格式的视频提示词。Seedance 的核心是单一动态 + 强烈节奏感，舞蹈、动作、运动或任何具节奏感的动态皆可。
+    seedance: `你是 Seedance 2.0 视频提示词专家。Seedance 2.0 是音画联合生成模型，一次生成画面+声音+对白。
+
+提示词公式（中文自然语言，60-150字）：
+主体（谁/什么）→ 动作（做什么、怎么做）→ 环境（地点、时间、光线）→ 镜头（景别+运动）→ 风格（色调/质感）→ 音频（对白/环境音/音乐）
 
 规则：
-1. 使用英文描述
-2. 重点：动作节奏、身体动态、音乐感、流畅性
-3. 描述动作的起止和过渡（starting from..., transitions into..., ending with...）
-4. 包含风格关键词：smooth, energetic, graceful, powerful
-5. 聚焦一个核心动态，50-100 words
-6. 输出纯提示词文本，不要解释`,
+1. 使用中文自然语言，像写给摄影师和录音师的镜头简报
+2. 对白用双引号包裹，模型会自动唇形同步（如 她说：“我受够了。”）
+3. 多镜头用“切到”连接，一次生成最多3个切镜
+4. 音频必须指导：命名环境音（雨打铁皮、室内底噪），需要安静写“无音乐”
+5. 动作描述要有物理后果（落叶被冲击波散开、尘土扬起）
+6. 镜头语言用专业术语：推轨、跟焦、甩镜、升降
+7. 短对白优于长独白（长台词会失去唇形同步）
+8. 输出纯提示词文本，不要解释`,
 
     pika: `你是 Pika 视频提示词专家。将用户描述转化为 Pika 格式的视频提示词。
 
@@ -259,8 +265,9 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 重点描述：运动轨迹、主体动作、场景变化
 3. 包含镜头语言：推/拉/摇/移/跟/升/降
 4. 描述时间维度上的变化（开始→过程→结束）
-5. 80-200字为佳
-6. 输出纯提示词文本，不要解释`,
+5. 如输入含对白/台词，在提示词中保留台词，海螺支持语音生成
+6. 80-200字为佳
+7. 输出纯提示词文本，不要解释`,
 
     vidu: `你是 Vidu 视频提示词专家。将用户描述转化为 Vidu 格式的视频提示词。
 
@@ -317,8 +324,9 @@ const UNIVERSAL_RULES_COMMON = `
 4. 只表现一个主体明确的画面，不要罗列多个互不相关的元素。`;
 
 const UNIVERSAL_RULES_VIDEO = `
-5. 视频模型一次只生成几秒钟的单一连续镜头。必须从输入中提炼出「一个核心动态」，把多个连续事件压缩为最具代表性的那一个动作过程；严禁把整场戏的多个阶段（如闯入→追逐→掏物→反转）全部塞进一条提示词。
-6. 描述动作的起止与过渡（开始→过程→结束），而非静态画面罗列。`;
+5. 视频模型一次生成一个短片段（4-15秒）。从输入中提炼核心动态过程，用动作的起止与过渡来表达（开始→过程→结束）。如果输入包含多个阶段事件，选择最具视觉冲击力的那一个作为主体动态；但如果目标平台支持多镜头（如 Seedance 2.0），可用 "cut to" 串联2-3个短镜头。
+6. 描述动作的物理后果而非抽象意图（"裙摆随旋转展开" 而非 "她很愤怒"）。
+7. 如果输入包含对白/台词，将其转化为目标平台支持的格式（如 Seedance 用双引号包裹 spoken line，其他平台可保留为画外音描述）。`;
 
 function getUniversalRules(category: "image" | "video"): string {
     return category === "video" ? UNIVERSAL_RULES_COMMON + UNIVERSAL_RULES_VIDEO : UNIVERSAL_RULES_COMMON;
@@ -331,8 +339,7 @@ const PRIORITY_OVER_FEWSHOT = `
 
 /**
  * 中文对照输出格式补充指令。
- * 追加到所有生成类 system prompt 末尾（本地与远程 skill 均生效），
- * 优先级最高，覆盖各平台「不要解释/纯提示词」限制，要求额外输出 [中文对照] 块。
+ * 仅对英文输出平台生效（Seedance 等中文平台不需要）。
  */
 const CHINESE_CONTRAST_SUFFIX = `
 
@@ -341,10 +348,17 @@ const CHINESE_CONTRAST_SUFFIX = `
 然后另起一行单独写 [中文对照]，再换行用通俗流畅的中文完整翻译这段提示词所描述的画面内容，方便不懂英文的用户理解与核对。
 中文对照只描述画面，不要包含英文标签或平台参数。`;
 
+/** 中文原生输出平台（提示词本身就是中文，无需中文对照翻译） */
+const CHINESE_NATIVE_PLATFORMS: PromptPlatform[] = ["seedance", "kling", "hailuo"];
+
 export async function aiGeneratePrompt(config: AiConfig, request: PromptGenerateRequest, onDelta?: (text: string) => void): Promise<PromptGenerateResult> {
-    // 数据驱动：优先从 Supabase skills 表加载，本地硬编码作 fallback
+    // 中文原生平台：本地 skill 优先（避免远程旧版英文 skill 覆盖）
+    // 其他平台：远程优先，本地 fallback
     const skillId = `pt_${request.platform.replace(/-/g, "_")}`;
-    const platformSkill = (await getSkillPrompt(skillId)) ?? PLATFORM_SKILLS[request.platform];
+    const isChineseNative = CHINESE_NATIVE_PLATFORMS.includes(request.platform);
+    const platformSkill = isChineseNative
+        ? PLATFORM_SKILLS[request.platform]
+        : ((await getSkillPrompt(skillId)) ?? PLATFORM_SKILLS[request.platform]);
     const platformMeta = PLATFORM_LIST.find((p) => p.id === request.platform);
 
     // 从数据集获取 few-shot 示例，增强生成质量
@@ -354,10 +368,19 @@ export async function aiGeneratePrompt(config: AiConfig, request: PromptGenerate
     const systemContent = platformSkill + universal + fewShot + PRIORITY_OVER_FEWSHOT + CHINESE_CONTRAST_SUFFIX;
 
     // 构建用户消息
-    let userContent = `原始描述：${request.input}`;
-    if (request.style) {
-        const stylePreset = STYLE_PRESETS.find((s) => s.id === request.style);
-        if (stylePreset) userContent += `\n风格要求：${stylePreset.label}（${stylePreset.keywords}）`;
+    let userContent = `以下是分镜数据，请根据目标平台规则转化为提示词：\n\n${request.input}`;
+    if (request.styles && request.styles.length > 0) {
+        const styleLines = request.styles.map((s) => {
+            const preset = STYLE_PRESETS.find((p) => p.id === s.id);
+            const label = preset?.label ?? s.id;
+            const keywords = preset?.keywords ?? "";
+            const w = s.weight !== 1.0 ? ` (权重${s.weight})` : "";
+            return `- ${label}${w}：${keywords}`;
+        });
+        userContent += `\n风格要求（按权重组合）：\n${styleLines.join("\n")}`;
+    }
+    if (request.customStyle) {
+        userContent += `\n自定义风格补充：${request.customStyle}`;
     }
     if (request.aspectRatio) userContent += `\n画面比例：${request.aspectRatio}`;
     if (request.extraInstructions) userContent += `\n额外要求：${request.extraInstructions}`;
@@ -389,7 +412,8 @@ export async function aiBatchGeneratePrompts(
     config: AiConfig,
     inputs: string[],
     platform: PromptPlatform,
-    style?: string,
+    styles?: { id: string; weight: number }[],
+    customStyle?: string,
     aspectRatio?: string,
     onProgress?: (index: number, total: number) => void,
 ): Promise<PromptGenerateResult[]> {
@@ -401,7 +425,7 @@ export async function aiBatchGeneratePrompts(
     for (let i = 0; i < inputs.length; i += CONCURRENCY) {
         const batch = inputs.slice(i, i + CONCURRENCY);
         const batchResults = await Promise.allSettled(
-            batch.map((input) => aiGeneratePrompt(config, { input, platform, style, aspectRatio })),
+            batch.map((input) => aiGeneratePrompt(config, { input, platform, styles, customStyle, aspectRatio })),
         );
         batchResults.forEach((result, j) => {
             const idx = i + j;

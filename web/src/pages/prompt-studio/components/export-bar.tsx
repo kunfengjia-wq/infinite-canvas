@@ -5,7 +5,7 @@ import { saveAs } from "file-saver";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { PLATFORM_LIST } from "@/types/prompt-studio";
+import { PLATFORM_LIST, STYLE_PRESETS } from "@/types/prompt-studio";
 
 /**
  * 导出栏：复制全部 / 下载 TXT / 下载 JSON / 保存到资产 / 保存项目
@@ -55,7 +55,7 @@ export function ExportBar() {
     const handleSaveToAssets = () => {
         current.entries.forEach((entry) => {
             const platform = PLATFORM_LIST.find((p) => p.id === entry.platform)?.label || entry.platform;
-            addAsset({ kind: "text", title: `[${platform}] ${entry.input.slice(0, 30)}`, coverUrl: "", tags: [platform, entry.style || "提示词"], source: "prompt-studio", data: { content: entry.prompt } });
+            addAsset({ kind: "text", title: `[${platform}] ${entry.input.slice(0, 30)}`, coverUrl: "", tags: [platform, ...(entry.styles?.map((s) => STYLE_PRESETS.find((p) => p.id === s.id)?.label ?? s.id) ?? ["提示词"])], source: "prompt-studio", data: { content: entry.prompt } });
         });
         message.success(`已保存 ${current.entries.length} 条到资产库`);
     };

@@ -6,7 +6,7 @@ import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiGeneratePrompt, aiOptimizePrompt, aiScorePrompt, type QualityScoreResult } from "@/services/prompt-studio-ai";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
-import { PLATFORM_LIST, PROMPT_CATEGORIES, type PromptCategory } from "@/types/prompt-studio";
+import { PLATFORM_LIST, PROMPT_CATEGORIES, STYLE_PRESETS, type PromptCategory } from "@/types/prompt-studio";
 import { cn } from "@/lib/utils";
 
 export function PromptResult({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
@@ -30,10 +30,10 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
     const filteredEntries = filterCategory === "all" ? current.entries : current.entries.filter((e) => e.category === filterCategory);
     const usedCategories = Array.from(new Set(current.entries.map((e) => e.category)));
 
-    const handleRegenerate = async (entryId: string, input: string, platform: string, style?: string) => {
+    const handleRegenerate = async (entryId: string, input: string, platform: string, styles?: { id: string; weight: number }[], customStyle?: string) => {
         setRegeneratingId(entryId);
         try {
-            const result = await aiGeneratePrompt(config, { input, platform: platform as never, style: style || undefined });
+            const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles, customStyle });
             updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation });
             message.success("已重新生成");
         } catch (error) {
@@ -98,11 +98,12 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                             <div className="mb-2 flex items-start gap-2">
                                 {categoryMeta && <Tag color={categoryMeta.color}>{categoryMeta.label}</Tag>}
                                 <Tag color={platformMeta?.category === "video" ? "purple" : "blue"}>{platformMeta?.label || entry.platform}</Tag>
-                                {entry.style && <Tag>{entry.style}</Tag>}
+                                {entry.styles && entry.styles.length > 0 && entry.styles.map((s) => <Tag key={s.id}>{STYLE_PRESETS.find((p) => p.id === s.id)?.label ?? s.id}{s.weight !== 1.0 ? `×${s.weight}` : ""}</Tag>)}
+                                {entry.customStyle && <Tag color="green">{entry.customStyle.slice(0, 20)}</Tag>}
                                 {entry.assetRef && <Tag color="green">{entry.assetRef}</Tag>}
                                 <span className="min-w-0 flex-1 whitespace-normal break-all text-xs leading-relaxed text-stone-400">{entry.input}</span>
                                 <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                                    <Button type="text" size="small" icon={regeneratingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} disabled={regeneratingId === entry.id} onClick={() => handleRegenerate(entry.id, entry.input, entry.platform, entry.style)} title="重新生成" />
+                                    <Button type="text" size="small" icon={regeneratingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} disabled={regeneratingId === entry.id} onClick={() => handleRegenerate(entry.id, entry.input, entry.platform, entry.styles, entry.customStyle)} title="重新生成" />
                                     <Tooltip title="AI 优化提示词">
                                         <Button type="text" size="small" icon={optimizingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} disabled={optimizingId === entry.id} onClick={() => handleOptimize(entry.id, entry.prompt, entry.platform)} />
                                     </Tooltip>

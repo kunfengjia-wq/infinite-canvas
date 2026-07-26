@@ -93,20 +93,20 @@ function shotHasContent(sh: Shot): boolean {
 function composeShotInput(sh: Shot): string {
     const parts: string[] = [];
     const lensTags = [sh.shotType, sh.angle, sh.cameraMovement, sh.lens, sh.lighting, sh.composition].filter((v) => v && v.trim());
-    if (lensTags.length > 0) parts.push(`【镜头】${lensTags.join(" / ")}`);
+    if (lensTags.length > 0) parts.push(`镜头：${lensTags.join("，")}`);
     const action = (sh.action ?? "").trim();
+    if (action) parts.push(`动作：${action}`);
     const dialogue = (sh.dialogue ?? "").trim();
+    if (dialogue) parts.push(`对白：${dialogue}`);
     const duration = (sh.duration ?? "").trim();
+    if (duration) parts.push(`时长：${duration}`);
     const mood = (sh.mood ?? "").trim();
+    if (mood) parts.push(`氛围：${mood}`);
     const transition = (sh.transition ?? "").trim();
+    if (transition) parts.push(`转场：${transition}`);
     const visual = (sh.visualDescription ?? "").trim();
-    if (action) parts.push(`【动作】${action}`);
-    if (dialogue) parts.push(`【对白】${dialogue}`);
-    if (duration) parts.push(`【时长】${duration}`);
-    if (mood) parts.push(`【氛围】${mood}`);
-    if (transition) parts.push(`【转场】${transition}`);
-    if (visual) parts.push(`【画面】${visual}`);
-    return parts.join(" ");
+    if (visual) parts.push(`场景：${visual}`);
+    return parts.join("\n");
 }
 
 /** 项目是否含可用素材 */
@@ -136,7 +136,7 @@ function buildGroups(project: StoryboardProject | null, filter: (sh: Shot) => bo
  */
 export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sourceTab }: Props) {
     const { message } = App.useApp();
-    const { selectedPlatforms, selectedStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
+    const { selectedPlatforms, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
 
     const [projects, setProjects] = useState<StoryboardProject[]>([]);
     const [selectedId, setSelectedId] = useState<string>("");
@@ -273,22 +273,22 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
         const imagePlatforms = selectedPlatforms.filter((id) => PLATFORM_LIST.find((p) => p.id === id)?.category === "image");
         const videoPlatforms = selectedPlatforms.filter((id) => PLATFORM_LIST.find((p) => p.id === id)?.category === "video");
 
-        // 画面描述输入（送图片平台）
+        // 画面描述输入
         const visualShots = visualGroups.flatMap((g) => g.shots).filter((sh) => checkedVisualShots.has(sh.id));
         const visualInputs = visualShots.map((sh) => editedDescriptions.get(sh.id) ?? sh.visualDescription);
 
-        // 全局分镜表输入（送视频平台）
+        // 全局分镜表输入
         const storyboardShots = storyboardGroups.flatMap((g) => g.shots).filter((sh) => checkedStoryboardShots.has(sh.id));
         const storyboardInputs = storyboardShots.map((sh) => composeShotInput(sh));
 
-        // 资产输入（送所有选中平台）
+        // 资产输入
         const selectedAssets = assetItems.filter((it) => checkedAssets.has(it.id));
         const assetInputs = selectedAssets.map(getAssetInput);
 
-        // 图片平台 = 画面描述 + 资产
-        const imageInputs = [...visualInputs, ...assetInputs];
-        // 视频平台 = 全局分镜表 + 资产
-        const videoInputs = [...storyboardInputs, ...assetInputs];
+        // 画面描述和分镜表均可送图片/视频平台
+        const allShotInputs = [...visualInputs, ...storyboardInputs, ...assetInputs];
+        const imageInputs = allShotInputs;
+        const videoInputs = allShotInputs;
 
         // 检查是否有内容
         const hasImageContent = imagePlatforms.length > 0 && imageInputs.length > 0;
@@ -312,21 +312,25 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
             // 图片平台生成
             if (hasImageContent) {
                 for (const platform of imagePlatforms) {
-                    const results = await aiBatchGeneratePrompts(config, imageInputs, platform, selectedStyle || undefined, undefined, () => {});
+                    const results = await aiBatchGeneratePrompts(config, imageInputs, platform, selectedStyles.length > 0 ? selectedStyles : undefined, customStyle || undefined, undefined, () => {});
                     results.forEach((result, i) => {
-                        const isAsset = i >= visualInputs.length;
                         let category: PromptCategory;
                         let assetRef: string;
-                        if (isAsset) {
-                            const asset = selectedAssets[i - visualInputs.length];
-                            category = asset.type;
-                            assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
-                        } else {
+                        if (i < visualInputs.length) {
                             category = "general";
                             const shot = visualShots[i];
                             assetRef = describeShotAssets(shot?.visualDescription ?? "", project.assets);
+                        } else if (i < visualInputs.length + storyboardInputs.length) {
+                            category = "general";
+                            const shot = storyboardShots[i - visualInputs.length];
+                            const searchText = `${shot?.action ?? ""} ${shot?.dialogue ?? ""}`;
+                            assetRef = describeShotAssets(searchText, project.assets);
+                        } else {
+                            const asset = selectedAssets[i - visualInputs.length - storyboardInputs.length];
+                            category = asset.type;
+                            assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
                         }
-                        addEntry({ input: imageInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, style: selectedStyle || undefined, category, assetRef });
+                        addEntry({ input: imageInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
                     });
                     done += results.length;
                     setProgress({ done, total: totalTasks });
@@ -336,22 +340,25 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
             // 视频平台生成
             if (hasVideoContent) {
                 for (const platform of videoPlatforms) {
-                    const results = await aiBatchGeneratePrompts(config, videoInputs, platform, selectedStyle || undefined, undefined, () => {});
+                    const results = await aiBatchGeneratePrompts(config, videoInputs, platform, selectedStyles.length > 0 ? selectedStyles : undefined, customStyle || undefined, undefined, () => {});
                     results.forEach((result, i) => {
-                        const isAsset = i >= storyboardInputs.length;
                         let category: PromptCategory;
                         let assetRef: string;
-                        if (isAsset) {
-                            const asset = selectedAssets[i - storyboardInputs.length];
-                            category = asset.type;
-                            assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
-                        } else {
+                        if (i < visualInputs.length) {
                             category = "general";
-                            const shot = storyboardShots[i];
+                            const shot = visualShots[i];
+                            assetRef = describeShotAssets(shot?.visualDescription ?? "", project.assets);
+                        } else if (i < visualInputs.length + storyboardInputs.length) {
+                            category = "general";
+                            const shot = storyboardShots[i - visualInputs.length];
                             const searchText = `${shot?.action ?? ""} ${shot?.dialogue ?? ""}`;
                             assetRef = describeShotAssets(searchText, project.assets);
+                        } else {
+                            const asset = selectedAssets[i - visualInputs.length - storyboardInputs.length];
+                            category = asset.type;
+                            assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
                         }
-                        addEntry({ input: videoInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, style: selectedStyle || undefined, category, assetRef });
+                        addEntry({ input: videoInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
                     });
                     done += results.length;
                     setProgress({ done, total: totalTasks });

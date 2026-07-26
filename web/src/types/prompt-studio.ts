@@ -51,7 +51,7 @@ export const PLATFORM_LIST: PlatformMeta[] = [
     { id: "hailuo", label: "海螺 Hailuo", category: "video", description: "MiniMax 视频生成", supportsNegative: false, maxLength: 300 },
     { id: "vidu", label: "Vidu", category: "video", description: "生数科技视频生成", supportsNegative: false, maxLength: 300 },
     { id: "luma", label: "Luma", category: "video", description: "3D 理解能力强", supportsNegative: false, maxLength: 300 },
-    { id: "seedance", label: "Seedance", category: "video", description: "舞蹈/动作视频生成", supportsNegative: false, maxLength: 300 },
+    { id: "seedance", label: "Seedance 2.0", category: "video", description: "字节跳动音画联合生成，支持对白唇形同步、多镜头、环境音", supportsNegative: false, maxLength: 400 },
     { id: "grok", label: "Grok", category: "video", description: "xAI Grok Imagine 视频生成，写实电影感", supportsNegative: false, maxLength: 300 },
 ];
 
@@ -111,13 +111,25 @@ export const STYLE_PRESETS: StylePreset[] = [
     { id: "acid_graphics", label: "酸性设计", keywords: "acid graphics, chrome text, liquid metal, distorted typography, rave culture", category: "现代设计", mediaType: "image" },
     { id: "y2k", label: "Y2K", keywords: "Y2K, 2000s aesthetic, metallic, butterfly, glossy, futuristic retro, pink chrome", category: "现代设计", mediaType: "image" },
     { id: "vaporwave", label: "蒸汽波", keywords: "vaporwave, retro futurism, greek statues, pastel gradient, glitch art, 80s 90s nostalgia", category: "现代设计", mediaType: "image" },
+    // 艺术流派补充
+    { id: "watercolor", label: "水彩画", keywords: "watercolor painting, soft washes, bleeding edges, transparent layers, paper texture, delicate", category: "艺术流派", mediaType: "both" },
+    { id: "oil_painting", label: "油画", keywords: "oil painting, impasto, rich texture, visible brushstrokes, classical technique, canvas", category: "艺术流派", mediaType: "both" },
+    // 动画类补充
+    { id: "low_poly", label: "低多边形", keywords: "low poly, geometric facets, minimalist 3D, flat shading, polygon art, clean edges", category: "动画类", mediaType: "both" },
+    { id: "storybook", label: "童话绘本", keywords: "children's book illustration, whimsical, soft pastel, storybook art, gentle textures, magical", category: "动画类", mediaType: "both" },
+    // 现代设计补充
+    { id: "isometric", label: "等距视角", keywords: "isometric view, 30 degree angle, clean vector, technical illustration, no perspective distortion", category: "现代设计", mediaType: "image" },
+    { id: "retro_poster", label: "复古海报", keywords: "vintage poster, WPA style, bold typography, limited palette, propaganda art, travel poster", category: "现代设计", mediaType: "image" },
+    // 科幻/奇幻补充
+    { id: "horror", label: "恐怖惊悚", keywords: "horror aesthetic, unsettling, dark atmosphere, jump scare tension, eerie lighting, psychological dread", category: "科幻/奇幻", mediaType: "both" },
 ];
 
 /** 提示词生成请求 */
 export type PromptGenerateRequest = {
     input: string;
     platform: PromptPlatform;
-    style?: string;
+    styles?: { id: string; weight: number }[];
+    customStyle?: string;
     aspectRatio?: string;
     extraInstructions?: string;
 };
@@ -133,7 +145,8 @@ export type PromptEntry = {
     translation?: string;
     /** 资产来源标注：如「角色：小明」「镜头」，确定性带入、不依赖 AI */
     assetRef?: string;
-    style?: string;
+    styles?: { id: string; weight: number }[];
+    customStyle?: string;
     category: PromptCategory;
 };
 

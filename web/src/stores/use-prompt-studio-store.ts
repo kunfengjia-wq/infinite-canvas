@@ -19,8 +19,10 @@ type PromptStudioStore = {
     selectedPlatform: PromptPlatform;
     /** 多选平台列表（用于批量生成） */
     selectedPlatforms: PromptPlatform[];
-    /** 当前选中的风格 */
-    selectedStyle: string;
+    /** 多选风格（含权重） */
+    selectedStyles: { id: string; weight: number }[];
+    /** 自定义风格关键词（自由文本） */
+    customStyle: string;
 
     loadProjects: () => Promise<void>;
     createProject: (title: string) => Promise<string>;
@@ -33,7 +35,7 @@ type PromptStudioStore = {
     /** 批量添加条目（AI 生成后） */
     addEntries: (entries: Omit<PromptEntry, "id">[]) => void;
     /** 更新单条 */
-    updateEntry: (entryId: string, patch: Partial<Pick<PromptEntry, "prompt" | "negativePrompt" | "category" | "style" | "translation" | "assetRef">>) => void;
+    updateEntry: (entryId: string, patch: Partial<Pick<PromptEntry, "prompt" | "negativePrompt" | "category" | "styles" | "customStyle" | "translation" | "assetRef">>) => void;
     /** 删除单条 */
     removeEntry: (entryId: string) => void;
     /** 清空当前项目条目 */
@@ -42,7 +44,10 @@ type PromptStudioStore = {
     // ─── 面板状态 ───
     setPlatform: (platform: PromptPlatform) => void;
     togglePlatform: (platform: PromptPlatform) => void;
-    setStyle: (style: string) => void;
+    toggleStyle: (id: string) => void;
+    setStyleWeight: (id: string, weight: number) => void;
+    setCustomStyle: (text: string) => void;
+    clearStyles: () => void;
     setGenerating: (v: boolean) => void;
 };
 
@@ -57,7 +62,8 @@ export const usePromptStudioStore = create<PromptStudioStore>()((set, get) => ({
     generating: false,
     selectedPlatform: "midjourney",
     selectedPlatforms: ["midjourney"],
-    selectedStyle: "",
+    selectedStyles: [],
+    customStyle: "",
 
     loadProjects: async () => {
         set({ loading: true });
@@ -138,6 +144,17 @@ export const usePromptStudioStore = create<PromptStudioStore>()((set, get) => ({
             if (next.length === 0) return state;
             return { selectedPlatforms: next, selectedPlatform: next[next.length - 1] };
         }),
-    setStyle: (style) => set({ selectedStyle: style }),
+    toggleStyle: (id) =>
+        set((state) => {
+            const exists = state.selectedStyles.some((s) => s.id === id);
+            if (exists) return { selectedStyles: state.selectedStyles.filter((s) => s.id !== id) };
+            return { selectedStyles: [...state.selectedStyles, { id, weight: 1.0 }] };
+        }),
+    setStyleWeight: (id, weight) =>
+        set((state) => ({
+            selectedStyles: state.selectedStyles.map((s) => (s.id === id ? { ...s, weight } : s)),
+        })),
+    setCustomStyle: (text) => set({ customStyle: text }),
+    clearStyles: () => set({ selectedStyles: [], customStyle: "" }),
     setGenerating: (v) => set({ generating: v }),
 }));

@@ -13,7 +13,7 @@ import { PROMPT_CATEGORIES, type PromptCategory } from "@/types/prompt-studio";
  */
 export function InputPanel({ config, onError, collapsible = false }: { config: AiConfig; onError: (msg: string) => void; collapsible?: boolean }) {
     const { message } = App.useApp();
-    const { selectedPlatform, selectedStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
+    const { selectedPlatform, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
     const [input, setInput] = useState("");
     const [category, setCategory] = useState<PromptCategory>("general");
     const [streamText, setStreamText] = useState("");
@@ -31,8 +31,8 @@ export function InputPanel({ config, onError, collapsible = false }: { config: A
         setGenerating(true);
         setStreamText("");
         try {
-            const result = await aiGeneratePrompt(config, { input: input.trim(), platform: selectedPlatform, style: selectedStyle || undefined }, (delta) => setStreamText((prev) => prev + delta));
-            addEntry({ input: input.trim(), platform: selectedPlatform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, style: selectedStyle || undefined, category });
+            const result = await aiGeneratePrompt(config, { input: input.trim(), platform: selectedPlatform, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined }, (delta) => setStreamText((prev) => prev + delta));
+            addEntry({ input: input.trim(), platform: selectedPlatform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category });
             await usePromptStudioStore.getState().saveCurrent();
             message.success("提示词已生成");
             setInput("");
