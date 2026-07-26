@@ -14,20 +14,28 @@ import { recordGeneration } from "@/services/db/history-repo";
 
 /** 将提示词平台映射到数据集 platform 标识 */
 function mapPlatformToDataset(platform: PromptPlatform): string {
+    // 直连各平台专属数据集（seed-datasets-v2.mjs / seed-prompt-examples.mjs 已灌入专属示例），
+    // 避免不同平台共用同一桶示例导致输出同质化（如 Seedance 误用 Runway 电影示例）。
     const map: Record<string, string> = {
         midjourney: "midjourney",
         "stable-diffusion": "sd",
         comfyui: "sd",
-        flux: "sd",
+        flux: "flux",
+        leonardo: "leonardo",
+        "dall-e": "dall-e",
+        "gpt-image": "gpt-image",
+        ideogram: "ideogram",
+        wanx: "wanx",
         kling: "kling",
-        hailuo: "kling",
-        vidu: "kling",
+        hailuo: "hailuo",
+        vidu: "vidu",
         runway: "runway",
-        pika: "runway",
-        sora: "runway",
-        veo: "runway",
-        luma: "runway",
-        seedance: "runway",
+        pika: "pika",
+        sora: "sora",
+        veo: "veo",
+        luma: "luma",
+        seedance: "seedance",
+        grok: "grok",
     };
     return map[platform] || "general";
 }
@@ -70,18 +78,37 @@ async function getFewShotExamples(platform: PromptPlatform): Promise<string> {
     }
 }
 
+// ─── 后端状态查询（供 UI 展示当前生成配置）─────────────────────
+
+/** 查询某平台当前使用的 skill 来源：远程（Supabase）或本地内置 */
+export async function getSkillSource(platform: PromptPlatform): Promise<"remote" | "local"> {
+    const skillId = `pt_${platform.replace(/-/g, "_")}`;
+    const remote = await getSkillPrompt(skillId);
+    return remote ? "remote" : "local";
+}
+
+/** 查询某平台 few-shot 示例的数据集归属与是否命中 */
+export async function getFewShotStatus(platform: PromptPlatform): Promise<{ dataset: string; available: boolean }> {
+    const dataset = mapPlatformToDataset(platform);
+    try {
+        const { count } = await supabase.from("dataset_items").select("*", { count: "exact", head: true }).eq("platform", dataset);
+        return { dataset, available: (count ?? 0) > 0 };
+    } catch {
+        return { dataset, available: false };
+    }
+}
+
 // ─── 平台专属 System Prompts ─────────────────────────────────────
 
 const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
-    midjourney: `你是 Midjourney 提示词专家。将用户描述转化为 Midjourney v6 格式的高质量提示词。
+    midjourney: `你是 Midjourney 提示词专家。将用户描述转化为 Midjourney v6.1 格式的高质量提示词。
 
 规则：
-1. 使用自然语言英文描述，像一段画面说明
+1. 使用自然语言英文描述，像一段画面说明，不用逗号堆标签
 2. 结构：主体 → 环境 → 光线 → 风格 → 参数
-3. 末尾附加参数：--ar {比例} --v 6 --style raw（如适用）
-4. 不使用逗号分隔标签，用流畅的英文句子
-5. 关键元素可用 ::权重 语法（如 subject::2 background::1）
-6. 输出纯提示词文本，不要解释`,
+3. 关键元素可用 ::权重 语法（如 subject::2 background::1）
+4. 末尾附加参数：--ar {比例} --v 6.1 --style raw --s {风格化强度，默认 100，风格强烈可提至 250-500}
+5. 输出纯提示词文本，不要解释`,
 
     "stable-diffusion": `你是 Stable Diffusion 提示词专家。将用户描述转化为 SD/SDXL 格式的高质量提示词。
 
@@ -90,7 +117,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 重要元素用权重语法：(tag:1.2) 或 (tag:1.4)
 3. 结构：质量标签 → 主体 → 细节 → 环境 → 光线 → 风格
 4. 开头加质量标签：masterpiece, best quality, ultra detailed
-5. 同时输出负面提示词（Negative Prompt）
+5. 同时输出高质量负面提示词，覆盖常见缺陷：lowres, bad anatomy, bad hands, extra fingers, missing limbs, blurry, jpeg artifacts, watermark, text, deformed
 6. 格式：第一行是正面提示词，第二行以 "Negative:" 开头是负面提示词`,
 
     comfyui: `你是 ComfyUI 提示词专家。将用户描述转化为兼容 SD 的 ComfyUI 工作流提示词。
@@ -99,7 +126,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 1. 格式与 Stable Diffusion 相同（逗号分隔标签 + 权重）
 2. 注意 CLIP 编码兼容性，避免特殊字符
 3. 结构：质量标签 → 主体 → 细节 → 环境 → 光线 → 风格
-4. 同时输出负面提示词
+4. 同时输出负面提示词（lowres, bad anatomy, bad hands, extra fingers, blurry, watermark, text 等）
 5. 格式：第一行是正面提示词，第二行以 "Negative:" 开头是负面提示词`,
 
     kling: `你是可灵(Kling)视频提示词专家。将用户描述转化为可灵视频生成的高质量提示词。
@@ -119,17 +146,17 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 结构：Camera movement → Subject action → Environment → Mood/Lighting
 3. 强调动态：motion, movement, transition
 4. 包含镜头运动描述：tracking shot, dolly in, pan left, tilt up
-5. 简洁有力，50-120 words
+5. 聚焦单一连续动态，简洁有力，50-120 words
 6. 输出纯提示词文本，不要解释`,
 
-    seedance: `你是 Seedance 视频提示词专家。将用户描述转化为 Seedance 格式的视频/舞蹈提示词。
+    seedance: `你是 Seedance 视频提示词专家。将用户描述转化为 Seedance 格式的视频提示词。Seedance 的核心是单一动态 + 强烈节奏感，舞蹈、动作、运动或任何具节奏感的动态皆可。
 
 规则：
 1. 使用英文描述
 2. 重点：动作节奏、身体动态、音乐感、流畅性
-3. 描述动作的起止和过渡
+3. 描述动作的起止和过渡（starting from..., transitions into..., ending with...）
 4. 包含风格关键词：smooth, energetic, graceful, powerful
-5. 50-100 words
+5. 聚焦一个核心动态，50-100 words
 6. 输出纯提示词文本，不要解释`,
 
     pika: `你是 Pika 视频提示词专家。将用户描述转化为 Pika 格式的视频提示词。
@@ -138,7 +165,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 1. 使用英文简洁描述
 2. 结构：主体 + 动作 + 环境 + 风格
 3. 可附加参数：-motion {1-4} -ar {比例}
-4. 简洁直接，30-80 words
+4. 聚焦单一动态，简洁直接，30-80 words
 5. 如需负面提示词，以 "Negative:" 开头另起一行
 6. 输出纯提示词文本，不要解释`,
 
@@ -157,27 +184,28 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 规则：
 1. 使用中文自然语言描述
 2. 结构：主体 → 动作 → 环境 → 光线 → 风格 → 画质
-3. 可包含画质词：高清、细腻、精致、电影质感
-4. 如需负面提示词，以 "负面提示词：" 开头另起一行
+3. 结尾加画质词：高清、细腻、精致、电影质感、超高清细节
+4. 同时输出中文负面提示词，以 "负面提示词：" 开头另起一行（如：低质量、模糊、变形、卡通、水印、文字）
 5. 80-200字
 6. 输出纯提示词文本，不要解释`,
 
-    flux: `你是 Flux 提示词专家。将用户描述转化为 Flux 2 格式的高质量提示词。
+    flux: `你是 Flux 提示词专家。将用户描述转化为 Flux 格式的高质量提示词。
 
 规则：
-1. 使用英文，自然语言与标签混合
-2. 重要元素可用权重语法：(tag:1.2)
-3. 结构：主体描述 → 细节 → 环境 → 光线 → 风格
-4. 同时输出负面提示词（Negative Prompt）
-5. 格式：第一行是正面提示词，第二行以 "Negative:" 开头是负面提示词
-6. 输出纯提示词文本，不要解释`,
+1. 使用英文，以流畅自然语言为主、少量标签点缀，不堆砌质量词
+2. Flux 对自然语言理解强，用描述性句子刻画主体、细节、环境、光线
+3. 重要元素可用权重语法：(tag:1.2)
+4. 结构：主体描述 → 细节 → 环境 → 光线 → 风格
+5. 同时输出负面提示词（Negative Prompt）
+6. 格式：第一行是正面提示词，第二行以 "Negative:" 开头是负面提示词
+7. 输出纯提示词文本，不要解释`,
 
     ideogram: `你是 Ideogram 提示词专家。将用户描述转化为 Ideogram 格式的高质量提示词。
 
 规则：
 1. 使用英文自然语言描述
-2. 擅长文字渲染，如需包含文字请明确标注
-3. 结构：主体 → 风格 → 构图 → 色彩
+2. Ideogram 擅长文字渲染：如需包含文字，必须用英文引号明确标注（如 a logo with the text "BREW"），并说明字体风格与排版位置
+3. 结构：主体 → 文字（如有）→ 风格 → 构图 → 色彩
 4. 强调设计感和排版美学
 5. 50-150 words
 6. 输出纯提示词文本，不要解释`,
@@ -188,7 +216,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 1. 使用英文，标签 + 自然语言混合
 2. 重要元素用权重语法：(tag:1.2)
 3. 结构：质量标签 → 主体 → 细节 → 环境 → 风格
-4. 适合游戏资产、概念艺术、角色设计
+4. 适合游戏资产、概念艺术、角色设计，可注明 concept art, game asset, multiple views
 5. 同时输出负面提示词
 6. 格式：第一行是正面提示词，第二行以 "Negative:" 开头是负面提示词`,
 
@@ -209,7 +237,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 像写一段电影场景说明
 3. 结构：场景设定 → 主体动作 → 镜头运动 → 光线氛围 → 时间变化
 4. 强调电影感：cinematic, film quality, dramatic lighting
-5. 描述时间维度上的动态变化
+5. 聚焦单一连续镜头的核心动态，描述时间维度上的动态变化，避免多事件流水账
 6. 80-200 words
 7. 输出纯提示词文本，不要解释`,
 
@@ -221,7 +249,7 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 3. 结构：场景 → 主体 → 动作 → 镜头 → 光线 → 氛围
 4. 包含镜头运动：tracking, dolly, pan, tilt, crane
 5. 描述材质和光线交互：reflections, shadows, volumetric light
-6. 80-180 words
+6. 聚焦单一动态，80-180 words
 7. 输出纯提示词文本，不要解释`,
 
     hailuo: `你是海螺(Hailuo/MiniMax)视频提示词专家。将用户描述转化为海螺视频生成的高质量提示词。
@@ -250,8 +278,19 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 2. 结构：Subject → Action → Environment → Camera movement → Style
 3. 强调运动流畅性和风格化
 4. 包含镜头运动描述
-5. 50-150 words
+5. 聚焦单一动态，50-150 words
 6. 输出纯提示词文本，不要解释`,
+
+    grok: `你是 Grok Imagine（xAI）视频提示词专家。将用户描述转化为 Grok Imagine 视频生成的高质量提示词。
+
+规则：
+1. 使用英文自然语言描述
+2. 结构：Subject → Action → Environment → Camera movement → Lighting/Mood
+3. 强调动态与镜头运动：tracking shot, dolly in, pan, tilt, slow motion
+4. 描述时间维度上的变化（开始→过程→结束）
+5. 电影感关键词：cinematic, realistic, high detail
+6. 聚焦单一连续动态，50-150 words
+7. 输出纯提示词文本，不要解释`,
 };
 
 // ─── 生成提示词 ──────────────────────────────────────────────────
@@ -259,7 +298,48 @@ const PLATFORM_SKILLS: Record<PromptPlatform, string> = {
 export type PromptGenerateResult = {
     prompt: string;
     negativePrompt?: string;
+    /** 中文对照：提示词正文的通俗中文翻译 */
+    translation?: string;
 };
+
+// ─── 跨平台通用铁律（所有平台 skill 之外统一注入）────────────────
+
+/**
+ * 通用铁律：纠正各平台共性问题——角色名无视觉意义、抽象情绪无法渲染、超长、多元素堆砌。
+ * 在 aiGeneratePrompt 调用处拼接，不依赖 skill 内容，远程/本地 skill 均生效。
+ */
+const UNIVERSAL_RULES_COMMON = `
+
+【通用铁律（所有平台必须遵守，优先级高于参考示例）】
+1. 角色/产品的专有名字（如“林悦”“陈朗”）对生成模型没有任何视觉意义，必须替换为具体外观描述（性别、发色发型、服装、体型、配饰等）。
+2. 抽象情绪与叙事意图（嘲讽、悬念、张力、悲伤、对峙）无法被直接渲染，必须转化为可见的肢体动作、面部表情或具体视觉元素。
+3. 严格遵守本平台的字数/长度上限，宁短勿长，超出一律精简。
+4. 只表现一个主体明确的画面，不要罗列多个互不相关的元素。`;
+
+const UNIVERSAL_RULES_VIDEO = `
+5. 视频模型一次只生成几秒钟的单一连续镜头。必须从输入中提炼出「一个核心动态」，把多个连续事件压缩为最具代表性的那一个动作过程；严禁把整场戏的多个阶段（如闯入→追逐→掏物→反转）全部塞进一条提示词。
+6. 描述动作的起止与过渡（开始→过程→结束），而非静态画面罗列。`;
+
+function getUniversalRules(category: "image" | "video"): string {
+    return category === "video" ? UNIVERSAL_RULES_COMMON + UNIVERSAL_RULES_VIDEO : UNIVERSAL_RULES_COMMON;
+}
+
+/** 置于 few-shot 示例之后，声明规则优先于示例（利用近因效应强化约束） */
+const PRIORITY_OVER_FEWSHOT = `
+
+【重要】以上参考示例仅供风格借鉴；若示例与本平台的格式规则或通用铁律冲突，一律以规则为准，不要模仿示例的长度、叙事方式或结构。`;
+
+/**
+ * 中文对照输出格式补充指令。
+ * 追加到所有生成类 system prompt 末尾（本地与远程 skill 均生效），
+ * 优先级最高，覆盖各平台「不要解释/纯提示词」限制，要求额外输出 [中文对照] 块。
+ */
+const CHINESE_CONTRAST_SUFFIX = `
+
+【输出格式补充要求（优先级最高，覆盖上文“不要解释”等限制）】
+请先输出符合上述平台规则的提示词正文（含负面提示词，如有）；
+然后另起一行单独写 [中文对照]，再换行用通俗流畅的中文完整翻译这段提示词所描述的画面内容，方便不懂英文的用户理解与核对。
+中文对照只描述画面，不要包含英文标签或平台参数。`;
 
 export async function aiGeneratePrompt(config: AiConfig, request: PromptGenerateRequest, onDelta?: (text: string) => void): Promise<PromptGenerateResult> {
     // 数据驱动：优先从 Supabase skills 表加载，本地硬编码作 fallback
@@ -269,7 +349,9 @@ export async function aiGeneratePrompt(config: AiConfig, request: PromptGenerate
 
     // 从数据集获取 few-shot 示例，增强生成质量
     const fewShot = await getFewShotExamples(request.platform);
-    const systemContent = platformSkill + fewShot;
+    // 通用铁律按图片/视频区分注入，置于平台 skill 之后、示例之前；优先级声明置于示例之后
+    const universal = getUniversalRules(platformMeta?.category ?? "image");
+    const systemContent = platformSkill + universal + fewShot + PRIORITY_OVER_FEWSHOT + CHINESE_CONTRAST_SUFFIX;
 
     // 构建用户消息
     let userContent = `原始描述：${request.input}`;
@@ -350,6 +432,7 @@ const PROMPT_OPTIMIZER_SYSTEM = `你是 AI 提示词优化专家。对用户提�
 输出格式：
 第一行：优化后的提示词
 第二行（如有负面提示词）：Negative: ...
+随后另起一行写 [中文对照]，再换行用通俗中文翻译优化后提示词的画面内容
 最后一行：[优化说明] 简要说明做了哪些改进（一句话）`;
 
 export async function aiOptimizePrompt(config: AiConfig, prompt: string, platform: PromptPlatform, onDelta?: (text: string) => void): Promise<PromptGenerateResult & { note?: string }> {
@@ -438,10 +521,19 @@ export async function aiTransferStyle(config: AiConfig, prompt: string, sourcePl
 // ─── 工具函数 ────────────────────────────────────────────────────
 
 function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerateResult {
-    const text = raw.trim();
+    let text = raw.trim();
+    let translation: string | undefined;
+
+    // 1. 先分离中文对照块（[中文对照] 之后的内容为通俗中文翻译）
+    const contrastMatch = text.match(/\[中文对照\][：:]?\s*/);
+    if (contrastMatch && contrastMatch.index !== undefined) {
+        translation = text.slice(contrastMatch.index + contrastMatch[0].length).trim() || undefined;
+        text = text.slice(0, contrastMatch.index).trim();
+    }
+
     const platformMeta = PLATFORM_LIST.find((p) => p.id === platform);
 
-    // 尝试分离负面提示词
+    // 2. 再在提示词正文内分离负面提示词
     if (platformMeta?.supportsNegative) {
         const negativePatterns = [/Negative:\s*/i, /负面提示词[：:]\s*/, /Negative Prompt:\s*/i];
         for (const pattern of negativePatterns) {
@@ -449,12 +541,12 @@ function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerat
             if (match && match.index !== undefined) {
                 const prompt = text.slice(0, match.index).trim();
                 const negativePrompt = text.slice(match.index + match[0].length).trim();
-                return { prompt, negativePrompt: negativePrompt || undefined };
+                return { prompt, negativePrompt: negativePrompt || undefined, translation };
             }
         }
     }
 
-    return { prompt: text };
+    return { prompt: text, translation };
 }
 
 function parseOptimizeResult(raw: string, platform: PromptPlatform): PromptGenerateResult & { note?: string } {

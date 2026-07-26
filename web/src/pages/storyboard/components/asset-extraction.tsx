@@ -8,7 +8,7 @@ import { aiExtractAssets, aiRegenerateAsset } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
 
-export function AssetExtraction({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string) => void }) {
+export function AssetExtraction({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
     const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
     const [extracting, setExtracting] = useState(false);
@@ -114,7 +114,7 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
                         </Button>
                     )}
                     {onExportToPrompt && (
-                        <Button icon={<Send className="size-4" />} disabled={total === 0} onClick={() => onExportToPrompt(current.id)}>
+                        <Button icon={<Send className="size-4" />} disabled={total === 0} onClick={() => onExportToPrompt(current.id, "asset")}>
                             导出到提示词工作台
                         </Button>
                     )}

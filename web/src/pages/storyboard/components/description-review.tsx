@@ -8,7 +8,7 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Scene, Shot } from "@/types/storyboard";
 
-export function DescriptionReview({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string) => void }) {
+export function DescriptionReview({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
     const copyText = useCopyText();
     const { current, processing, setProcessing, updateShotDescription, confirmDescriptions, saveCurrent } = useStoryboardStore();
@@ -98,7 +98,7 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                         确认描述（{describedCount}/{allShots.length}）
                     </Button>
                     {onExportToPrompt && (
-                        <Button icon={<Send className="size-4" />} onClick={() => onExportToPrompt(current.id)} disabled={describedCount === 0}>
+                        <Button icon={<Send className="size-4" />} onClick={() => onExportToPrompt(current.id, "visual")} disabled={describedCount === 0}>
                             导出到提示词工作台
                         </Button>
                     )}

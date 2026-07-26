@@ -32,7 +32,7 @@ export function InputPanel({ config, onError, collapsible = false }: { config: A
         setStreamText("");
         try {
             const result = await aiGeneratePrompt(config, { input: input.trim(), platform: selectedPlatform, style: selectedStyle || undefined }, (delta) => setStreamText((prev) => prev + delta));
-            addEntry({ input: input.trim(), platform: selectedPlatform, prompt: result.prompt, negativePrompt: result.negativePrompt, style: selectedStyle || undefined, category });
+            addEntry({ input: input.trim(), platform: selectedPlatform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, style: selectedStyle || undefined, category });
             await usePromptStudioStore.getState().saveCurrent();
             message.success("提示词已生成");
             setInput("");

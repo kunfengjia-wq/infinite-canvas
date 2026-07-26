@@ -21,7 +21,7 @@ function getPanelMax(): number {
     return Math.max(860, Math.floor(window.innerWidth * 0.85));
 }
 
-export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiConfig; onExportToPrompt?: (storyboardId: string) => void }) {
+export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiConfig; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
     const { current, step, setStep } = useStoryboardStore();
     const [tableOpen, setTableOpen] = useState(true);
@@ -142,6 +142,7 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
                                     wide={wide}
                                     maximized={maximized}
                                     onToggleMaximize={() => setMaximized(!maximized)}
+                                    onExportToPrompt={onExportToPrompt}
                                 />
                             </div>
                         ) : (

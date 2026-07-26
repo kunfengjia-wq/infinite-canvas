@@ -34,7 +34,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         setRegeneratingId(entryId);
         try {
             const result = await aiGeneratePrompt(config, { input, platform: platform as never, style: style || undefined });
-            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt });
+            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation });
             message.success("已重新生成");
         } catch (error) {
             onError(error instanceof Error ? error.message : "重新生成失败");
@@ -47,7 +47,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         setOptimizingId(entryId);
         try {
             const result = await aiOptimizePrompt(config, prompt, platform as never);
-            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt });
+            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation });
             message.success(result.note ? `已优化：${result.note}` : "已优化");
         } catch (error) {
             onError(error instanceof Error ? error.message : "优化失败");
@@ -99,6 +99,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                 {categoryMeta && <Tag color={categoryMeta.color}>{categoryMeta.label}</Tag>}
                                 <Tag color={platformMeta?.category === "video" ? "purple" : "blue"}>{platformMeta?.label || entry.platform}</Tag>
                                 {entry.style && <Tag>{entry.style}</Tag>}
+                                {entry.assetRef && <Tag color="green">{entry.assetRef}</Tag>}
                                 <span className="min-w-0 flex-1 whitespace-normal break-all text-xs leading-relaxed text-stone-400">{entry.input}</span>
                                 <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
                                     <Button type="text" size="small" icon={regeneratingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} disabled={regeneratingId === entry.id} onClick={() => handleRegenerate(entry.id, entry.input, entry.platform, entry.style)} title="重新生成" />
@@ -129,6 +130,12 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                         autoSize={{ minRows: 1, maxRows: 6 }}
                                         className="mt-1 font-mono text-xs leading-relaxed text-red-300"
                                     />
+                                </div>
+                            )}
+                            {entry.translation && (
+                                <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 p-2 dark:border-emerald-900 dark:bg-emerald-950/40">
+                                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">中文对照</span>
+                                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-stone-600 dark:text-stone-300">{entry.translation}</p>
                                 </div>
                             )}
                             {scoreResults[entry.id] && (

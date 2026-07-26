@@ -22,8 +22,9 @@ export function ExportBar() {
         const text = current.entries
             .map((e) => {
                 const platform = PLATFORM_LIST.find((p) => p.id === e.platform)?.label || e.platform;
-                let line = `[${platform}] ${e.prompt}`;
+                let line = `[${platform}]${e.assetRef ? ` [${e.assetRef}]` : ""} ${e.prompt}`;
                 if (e.negativePrompt) line += `\nNegative: ${e.negativePrompt}`;
+                if (e.translation) line += `\n中文对照: ${e.translation}`;
                 return line;
             })
             .join("\n\n---\n\n");
@@ -34,8 +35,11 @@ export function ExportBar() {
         const text = current.entries
             .map((e) => {
                 const platform = PLATFORM_LIST.find((p) => p.id === e.platform)?.label || e.platform;
-                let line = `=== ${platform} ===\n输入: ${e.input}\n提示词: ${e.prompt}`;
+                let line = `=== ${platform} ===\n输入: ${e.input}`;
+                if (e.assetRef) line += `\n资产: ${e.assetRef}`;
+                line += `\n提示词: ${e.prompt}`;
                 if (e.negativePrompt) line += `\n负面提示词: ${e.negativePrompt}`;
+                if (e.translation) line += `\n中文对照: ${e.translation}`;
                 return line;
             })
             .join("\n\n");

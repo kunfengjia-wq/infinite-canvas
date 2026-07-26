@@ -52,6 +52,7 @@ export const PLATFORM_LIST: PlatformMeta[] = [
     { id: "vidu", label: "Vidu", category: "video", description: "生数科技视频生成", supportsNegative: false, maxLength: 300 },
     { id: "luma", label: "Luma", category: "video", description: "3D 理解能力强", supportsNegative: false, maxLength: 300 },
     { id: "seedance", label: "Seedance", category: "video", description: "舞蹈/动作视频生成", supportsNegative: false, maxLength: 300 },
+    { id: "grok", label: "Grok", category: "video", description: "xAI Grok Imagine 视频生成，写实电影感", supportsNegative: false, maxLength: 300 },
 ];
 
 /** 提示词平台类型（联合类型） */
@@ -63,51 +64,53 @@ export type StylePreset = {
     label: string;
     keywords: string;
     category: string;
+    /** 适用媒体类型：图片/视频/两者皆可，用于按所选平台过滤 */
+    mediaType: "image" | "video" | "both";
 };
 
 /** 扩展风格预设（30+，覆盖写实/动画/艺术流派/文化/科幻/现代设计） */
 export const STYLE_PRESETS: StylePreset[] = [
     // 写实类
-    { id: "cinematic_realism", label: "电影写实", keywords: "cinematic, film grain, anamorphic lens, dramatic lighting, shallow depth of field, color graded", category: "写实类" },
-    { id: "documentary_style", label: "纪录片", keywords: "documentary, handheld camera, natural light, raw footage, observational, vérité", category: "写实类" },
-    { id: "commercial_photo", label: "商业广告", keywords: "commercial quality, product shot, studio lighting, premium, clean background, high-end", category: "写实类" },
-    { id: "film_stock", label: "胶片质感", keywords: "film photography, 35mm, kodak portra, fujifilm, grain, warm tones, analog", category: "写实类" },
-    { id: "fashion_editorial", label: "时尚大片", keywords: "fashion photography, editorial, haute couture, dramatic pose, magazine cover, high fashion", category: "写实类" },
+    { id: "cinematic_realism", label: "电影写实", keywords: "cinematic, film grain, anamorphic lens, dramatic lighting, shallow depth of field, color graded", category: "写实类", mediaType: "both" },
+    { id: "documentary_style", label: "纪录片", keywords: "documentary, handheld camera, natural light, raw footage, observational, vérité", category: "写实类", mediaType: "both" },
+    { id: "commercial_photo", label: "商业广告", keywords: "commercial quality, product shot, studio lighting, premium, clean background, high-end", category: "写实类", mediaType: "both" },
+    { id: "film_stock", label: "胶片质感", keywords: "film photography, 35mm, kodak portra, fujifilm, grain, warm tones, analog", category: "写实类", mediaType: "both" },
+    { id: "fashion_editorial", label: "时尚大片", keywords: "fashion photography, editorial, haute couture, dramatic pose, magazine cover, high fashion", category: "写实类", mediaType: "image" },
     // 动画类
-    { id: "anime", label: "日系动漫", keywords: "anime style, cel shading, vibrant colors, detailed eyes, clean lines, manga inspired", category: "动画类" },
-    { id: "western_comics", label: "美漫", keywords: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel", category: "动画类" },
-    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing", category: "动画类" },
-    { id: "stop_motion", label: "定格动画", keywords: "stop motion, claymation, miniature, handcrafted, tactile, laika studios", category: "动画类" },
-    { id: "ink_animation", label: "水墨动画", keywords: "chinese ink animation, brush strokes, flowing ink, traditional animation, ethereal movement", category: "动画类" },
-    { id: "pixel_art", label: "像素艺术", keywords: "pixel art, 8-bit, 16-bit, retro game, sprite, nostalgic gaming", category: "动画类" },
+    { id: "anime", label: "日系动漫", keywords: "anime style, cel shading, vibrant colors, detailed eyes, clean lines, manga inspired", category: "动画类", mediaType: "both" },
+    { id: "western_comics", label: "美漫", keywords: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel", category: "动画类", mediaType: "both" },
+    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing", category: "动画类", mediaType: "both" },
+    { id: "stop_motion", label: "定格动画", keywords: "stop motion, claymation, miniature, handcrafted, tactile, laika studios", category: "动画类", mediaType: "both" },
+    { id: "ink_animation", label: "水墨动画", keywords: "chinese ink animation, brush strokes, flowing ink, traditional animation, ethereal movement", category: "动画类", mediaType: "both" },
+    { id: "pixel_art", label: "像素艺术", keywords: "pixel art, 8-bit, 16-bit, retro game, sprite, nostalgic gaming", category: "动画类", mediaType: "both" },
     // 艺术流派
-    { id: "impressionism", label: "印象派", keywords: "impressionist painting, visible brushstrokes, light and color, monet, renoir, plein air", category: "艺术流派" },
-    { id: "expressionism", label: "表现主义", keywords: "expressionist, distorted forms, bold colors, emotional intensity, edvard munch", category: "艺术流派" },
-    { id: "surrealism", label: "超现实主义", keywords: "surrealist, dreamlike, impossible scenes, dali, magritte, subconscious", category: "艺术流派" },
-    { id: "pop_art", label: "波普艺术", keywords: "pop art, andy warhol, bold colors, comic style, repetition, consumer culture", category: "艺术流派" },
-    { id: "rococo", label: "洛可可", keywords: "rococo, ornate, pastel colors, gold leaf, decorative, 18th century, fragonard", category: "艺术流派" },
-    { id: "baroque", label: "巴洛克", keywords: "baroque, dramatic lighting, rich colors, grandeur, caravaggio, chiaroscuro", category: "艺术流派" },
-    { id: "art_nouveau", label: "新艺术运动", keywords: "art nouveau, organic curves, floral motifs, alphonse mucha, flowing lines", category: "艺术流派" },
-    { id: "art_deco", label: "装饰艺术", keywords: "art deco, geometric patterns, gold and black, 1920s, gatsby, symmetrical, luxury", category: "艺术流派" },
+    { id: "impressionism", label: "印象派", keywords: "impressionist painting, visible brushstrokes, light and color, monet, renoir, plein air", category: "艺术流派", mediaType: "image" },
+    { id: "expressionism", label: "表现主义", keywords: "expressionist, distorted forms, bold colors, emotional intensity, edvard munch", category: "艺术流派", mediaType: "image" },
+    { id: "surrealism", label: "超现实主义", keywords: "surrealist, dreamlike, impossible scenes, dali, magritte, subconscious", category: "艺术流派", mediaType: "both" },
+    { id: "pop_art", label: "波普艺术", keywords: "pop art, andy warhol, bold colors, comic style, repetition, consumer culture", category: "艺术流派", mediaType: "image" },
+    { id: "rococo", label: "洛可可", keywords: "rococo, ornate, pastel colors, gold leaf, decorative, 18th century, fragonard", category: "艺术流派", mediaType: "image" },
+    { id: "baroque", label: "巴洛克", keywords: "baroque, dramatic lighting, rich colors, grandeur, caravaggio, chiaroscuro", category: "艺术流派", mediaType: "image" },
+    { id: "art_nouveau", label: "新艺术运动", keywords: "art nouveau, organic curves, floral motifs, alphonse mucha, flowing lines", category: "艺术流派", mediaType: "image" },
+    { id: "art_deco", label: "装饰艺术", keywords: "art deco, geometric patterns, gold and black, 1920s, gatsby, symmetrical, luxury", category: "艺术流派", mediaType: "image" },
     // 文化风格
-    { id: "chinese_ink", label: "中国水墨", keywords: "chinese ink painting, shan shui, brush and ink, rice paper, negative space, zen minimalism", category: "文化风格" },
-    { id: "gongbi", label: "工笔重彩", keywords: "gongbi painting, fine brushwork, rich colors, detailed, chinese traditional, silk painting", category: "文化风格" },
-    { id: "dunhuang", label: "敦煌壁画", keywords: "dunhuang murals, buddhist art, flying apsaras, mineral pigments, ancient chinese", category: "文化风格" },
-    { id: "ukiyo_e", label: "浮世绘", keywords: "ukiyo-e, japanese woodblock print, hokusai, flat colors, bold outlines", category: "文化风格" },
-    { id: "persian_miniature", label: "波斯细密画", keywords: "persian miniature, intricate detail, flat perspective, gold illumination, islamic art", category: "文化风格" },
+    { id: "chinese_ink", label: "中国水墨", keywords: "chinese ink painting, shan shui, brush and ink, rice paper, negative space, zen minimalism", category: "文化风格", mediaType: "both" },
+    { id: "gongbi", label: "工笔重彩", keywords: "gongbi painting, fine brushwork, rich colors, detailed, chinese traditional, silk painting", category: "文化风格", mediaType: "image" },
+    { id: "dunhuang", label: "敦煌壁画", keywords: "dunhuang murals, buddhist art, flying apsaras, mineral pigments, ancient chinese", category: "文化风格", mediaType: "image" },
+    { id: "ukiyo_e", label: "浮世绘", keywords: "ukiyo-e, japanese woodblock print, hokusai, flat colors, bold outlines", category: "文化风格", mediaType: "image" },
+    { id: "persian_miniature", label: "波斯细密画", keywords: "persian miniature, intricate detail, flat perspective, gold illumination, islamic art", category: "文化风格", mediaType: "image" },
     // 科幻/奇幻
-    { id: "cyberpunk", label: "赛博朋克", keywords: "cyberpunk, neon lights, rain-soaked streets, holographic, dystopian, blade runner", category: "科幻/奇幻" },
-    { id: "steampunk", label: "蒸汽朋克", keywords: "steampunk, brass gears, victorian era, steam powered, mechanical, copper pipes", category: "科幻/奇幻" },
-    { id: "solarpunk", label: "太阳朋克", keywords: "solarpunk, green technology, sustainable, plants and tech harmony, optimistic future", category: "科幻/奇幻" },
-    { id: "gothic", label: "哥特", keywords: "gothic, dark architecture, pointed arches, stained glass, dramatic shadows, medieval", category: "科幻/奇幻" },
-    { id: "dark_fantasy", label: "暗黑奇幻", keywords: "dark fantasy, eldritch, ominous atmosphere, twisted creatures, grimdark, eerie glow", category: "科幻/奇幻" },
-    { id: "space_opera", label: "太空歌剧", keywords: "space opera, epic scale, starships, nebula, alien worlds, interstellar, cosmic", category: "科幻/奇幻" },
+    { id: "cyberpunk", label: "赛博朋克", keywords: "cyberpunk, neon lights, rain-soaked streets, holographic, dystopian, blade runner", category: "科幻/奇幻", mediaType: "both" },
+    { id: "steampunk", label: "蒸汽朋克", keywords: "steampunk, brass gears, victorian era, steam powered, mechanical, copper pipes", category: "科幻/奇幻", mediaType: "both" },
+    { id: "solarpunk", label: "太阳朋克", keywords: "solarpunk, green technology, sustainable, plants and tech harmony, optimistic future", category: "科幻/奇幻", mediaType: "both" },
+    { id: "gothic", label: "哥特", keywords: "gothic, dark architecture, pointed arches, stained glass, dramatic shadows, medieval", category: "科幻/奇幻", mediaType: "both" },
+    { id: "dark_fantasy", label: "暗黑奇幻", keywords: "dark fantasy, eldritch, ominous atmosphere, twisted creatures, grimdark, eerie glow", category: "科幻/奇幻", mediaType: "both" },
+    { id: "space_opera", label: "太空歌剧", keywords: "space opera, epic scale, starships, nebula, alien worlds, interstellar, cosmic", category: "科幻/奇幻", mediaType: "both" },
     // 现代设计
-    { id: "minimalism", label: "极简主义", keywords: "minimalist, clean composition, negative space, simple geometry, monochrome", category: "现代设计" },
-    { id: "memphis", label: "孟菲斯", keywords: "memphis design, bold geometric shapes, bright colors, playful, 1980s, postmodern", category: "现代设计" },
-    { id: "acid_graphics", label: "酸性设计", keywords: "acid graphics, chrome text, liquid metal, distorted typography, rave culture", category: "现代设计" },
-    { id: "y2k", label: "Y2K", keywords: "Y2K, 2000s aesthetic, metallic, butterfly, glossy, futuristic retro, pink chrome", category: "现代设计" },
-    { id: "vaporwave", label: "蒸汽波", keywords: "vaporwave, retro futurism, greek statues, pastel gradient, glitch art, 80s 90s nostalgia", category: "现代设计" },
+    { id: "minimalism", label: "极简主义", keywords: "minimalist, clean composition, negative space, simple geometry, monochrome", category: "现代设计", mediaType: "both" },
+    { id: "memphis", label: "孟菲斯", keywords: "memphis design, bold geometric shapes, bright colors, playful, 1980s, postmodern", category: "现代设计", mediaType: "image" },
+    { id: "acid_graphics", label: "酸性设计", keywords: "acid graphics, chrome text, liquid metal, distorted typography, rave culture", category: "现代设计", mediaType: "image" },
+    { id: "y2k", label: "Y2K", keywords: "Y2K, 2000s aesthetic, metallic, butterfly, glossy, futuristic retro, pink chrome", category: "现代设计", mediaType: "image" },
+    { id: "vaporwave", label: "蒸汽波", keywords: "vaporwave, retro futurism, greek statues, pastel gradient, glitch art, 80s 90s nostalgia", category: "现代设计", mediaType: "image" },
 ];
 
 /** 提示词生成请求 */
@@ -126,6 +129,10 @@ export type PromptEntry = {
     platform: string;
     prompt: string;
     negativePrompt?: string;
+    /** 中文对照：生成提示词的通俗中文翻译，便于不懂英文的用户理解与核对 */
+    translation?: string;
+    /** 资产来源标注：如「角色：小明」「镜头」，确定性带入、不依赖 AI */
+    assetRef?: string;
     style?: string;
     category: PromptCategory;
 };

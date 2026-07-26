@@ -21,14 +21,16 @@ export default function StoryboardPage() {
 
     const [view, setView] = useState<WorkbenchView>("storyboard");
     const [sourceStoryboardId, setSourceStoryboardId] = useState<string | null>(null);
+    const [sourceTab, setSourceTab] = useState<"visual" | "storyboard" | "asset" | undefined>(undefined);
 
     useEffect(() => {
         void loadProjects();
     }, [loadProjects]);
 
-    /** 从第 5 步导出到提示词工作台：实时关联当前分镜项目 */
-    const handleExportToPrompt = (storyboardId: string) => {
+    /** 导出到提示词工作台：指定来源分类 */
+    const handleExportToPrompt = (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => {
         setSourceStoryboardId(storyboardId);
+        setSourceTab(tab);
         setView("prompt");
     };
 
@@ -67,7 +69,7 @@ export default function StoryboardPage() {
                             </Button>
                         </div>
                     ) : view === "prompt" ? (
-                        <PromptWorkspace config={aiConfig} sourceStoryboardId={sourceStoryboardId} />
+                        <PromptWorkspace config={aiConfig} sourceStoryboardId={sourceStoryboardId} sourceTab={sourceTab} />
                     ) : (
                         <StoryboardWorkspace config={aiConfig} onExportToPrompt={handleExportToPrompt} />
                     )}

@@ -1,4 +1,4 @@
-import { Copy, ChevronDown, ChevronUp, Download, FileText, Maximize2, Minimize2, Search } from "lucide-react";
+import { Copy, ChevronDown, ChevronUp, Download, FileText, Maximize2, Minimize2, Search, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Input, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -16,6 +16,8 @@ type Props = {
     wide?: boolean;
     maximized?: boolean;
     onToggleMaximize?: () => void;
+    /** 导出整表到提示词工作台 */
+    onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void;
 };
 
 /** 解析时长字符串为秒数，如 "3s" / "3秒" / "3-5s" → 取首个数字 */
@@ -25,7 +27,7 @@ function parseDuration(d?: string): number {
     return m ? parseFloat(m[1]) : 0;
 }
 
-export function StoryboardTable({ variant = "bottom", wide = false, maximized = false, onToggleMaximize }: Props) {
+export function StoryboardTable({ variant = "bottom", wide = false, maximized = false, onToggleMaximize, onExportToPrompt }: Props) {
     const { current, updateShotDescription, updateShot } = useStoryboardStore();
     const copyText = useCopyText();
     const [collapsed, setCollapsed] = useState(false);
@@ -167,6 +169,11 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
                         <Button type="text" size="small" icon={<Copy className="size-3" />} onClick={handleCopyTable} title="复制全表" />
                         <Button type="text" size="small" icon={<Download className="size-3" />} onClick={handleExportCsv} title="导出 CSV" />
                         <Button type="text" size="small" icon={<FileText className="size-3" />} onClick={() => void handleExportPdf()} title="导出 PDF" />
+                        {onExportToPrompt && (
+                            <Tooltip title="将整表导入提示词工作台生成提示词">
+                                <Button type="primary" size="small" icon={<Send className="size-3" />} onClick={() => onExportToPrompt(current.id, "storyboard")}>去提示词</Button>
+                            </Tooltip>
+                        )}
                     </div>
                 </div>
                 <div className="space-y-1.5 border-b border-stone-100 px-3 py-2 dark:border-stone-800">
@@ -223,6 +230,9 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
                     <Button type="text" size="small" icon={<Copy className="size-3.5" />} onClick={handleCopyTable} className="!text-xs">复制</Button>
                     <Button type="text" size="small" icon={<Download className="size-3.5" />} onClick={handleExportCsv} className="!text-xs">CSV</Button>
                     <Button type="text" size="small" icon={<FileText className="size-3.5" />} onClick={() => void handleExportPdf()} className="!text-xs">PDF</Button>
+                    {onExportToPrompt && (
+                        <Button type="primary" size="small" icon={<Send className="size-3.5" />} onClick={() => onExportToPrompt(current.id, "storyboard")} className="!text-xs">去提示词工作台</Button>
+                    )}
                 </div>
             </div>
             {!collapsed && (
