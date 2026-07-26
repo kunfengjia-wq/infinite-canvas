@@ -35,7 +35,14 @@ export function PromptWorkspace({ config, sourceStoryboardId }: { config: AiConf
         void getStoryboardRepo()
             .list()
             .then((list) => {
-                setHasStoryboard(list.some((p) => (p.scenes ?? []).some((s) => (s.shots ?? []).some((sh) => (sh.visualDescription ?? "").trim()))));
+                setHasStoryboard(
+                    list.some((p) => {
+                        const hasShots = (p.scenes ?? []).some((s) => (s.shots ?? []).some((sh) => (sh.visualDescription ?? "").trim()));
+                        const a = p.assets;
+                        const assetCount = (a?.characters?.length ?? 0) + (a?.locations?.length ?? 0) + (a?.props?.length ?? 0) + (a?.products?.length ?? 0);
+                        return hasShots || assetCount > 0;
+                    })
+                );
             });
     }, [sourceStoryboardId]);
 

@@ -1,16 +1,14 @@
 import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Checkbox, Empty, Input, Popconfirm, Radio, Select, Tabs, Tooltip } from "antd";
+import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
-import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiExtractAssets, aiRegenerateAsset } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
-import { PLATFORM_LIST, type PromptCategory } from "@/types/prompt-studio";
 
-export function AssetExtraction({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
+export function AssetExtraction({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string) => void }) {
     const { message } = App.useApp();
     const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
     const [extracting, setExtracting] = useState(false);
@@ -68,100 +66,6 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
 
     const total = assets.characters.length + assets.locations.length + assets.props.length + assets.products.length;
 
-    /** 将资产关键词发送到提示词工作台（带视图/风格/平台选择） */
-    const [sendPanel, setSendPanel] = useState<{ name: string; keywords: string; category: PromptCategory } | null>(null);
-    const [sendFormat, setSendFormat] = useState("three-view");
-    const [sendStyle, setSendStyle] = useState("photorealistic");
-    const [sendPlatform, setSendPlatform] = useState("midjourney");
-
-    /** 自然语言句式模板，{subject} 会被替换为 keywords */
-    const FORMAT_OPTIONS: Record<string, { value: string; label: string; template: string }[]> = {
-        character: [
-            { value: "four-panel", label: "四宫格（面部+全身）", template: "Professional character model sheet of {subject}. Clean 2x2 four-panel layout on pure white background: Top-left panel (smaller): front-facing face close-up portrait showing full facial details. Top-right panel (smaller): side profile face close-up showing jawline and nose bridge. Bottom-left panel (larger): full body front view from head to toe, neutral standing pose. Bottom-right panel (larger): full body back view from neck down, showing hairstyle and costume from behind. No props, no scene elements, no other characters." },
-            { value: "three-view", label: "三视图（正/侧/背）", template: "Professional character reference sheet of {subject}. Displayed in three aligned full-body views: front, side, and back. Neutral T-pose, clean pure white background, no props, no scene elements." },
-            { value: "four-view", label: "四视图（正/侧/背/3/4）", template: "Character turnaround model sheet of {subject}. Four aligned full-body views: front, three-quarter, side, and back. Neutral standing pose, clean white background, production-ready reference." },
-            { value: "bust", label: "半身特写", template: "Detailed character portrait bust shot of {subject}. Head and shoulders, facing camera, intricate facial details visible, clean neutral background." },
-            { value: "fullbody", label: "全身单张", template: "Full body character concept art of {subject}. Single dynamic pose, entire figure visible head to toe, clean background, production quality." },
-        ],
-        scene: [
-            { value: "wide", label: "全景（建立镜头）", template: "Wide establishing shot of {subject}. Full environment visible, cinematic composition, depth and scale conveyed, atmospheric perspective." },
-            { value: "medium", label: "中景", template: "Medium shot of {subject}. Key environmental details in focus, balanced foreground and background, natural depth of field." },
-            { value: "detail", label: "细节特写", template: "Extreme close-up detail shot of {subject}. Texture and material quality emphasized, shallow depth of field, macro photography feel." },
-        ],
-        prop: [
-            { value: "single", label: "单物体（白底）", template: "Professional product photography of {subject}. Isolated on seamless white background, soft diffused studio lighting, sharp focus, no environment." },
-            { value: "multi-angle", label: "多角度展示", template: "Multi-angle showcase of {subject}. Front, side, and top views arranged on white background, consistent studio lighting, technical reference style." },
-            { value: "in-context", label: "场景搭配", template: "Lifestyle shot of {subject} placed in a natural real-world setting. Contextual environment, soft natural lighting, editorial photography style." },
-        ],
-        product: [
-            { value: "hero", label: "主图（商业广告级）", template: "High-end commercial product photography of {subject}. Pristine white seamless background, professional three-point studio lighting, hero angle, advertising campaign quality, razor-sharp detail." },
-            { value: "multi-angle", label: "多角度", template: "Product multi-angle presentation of {subject}. 360-degree views on clean white background, consistent professional lighting, e-commerce catalog style." },
-            { value: "lifestyle", label: "场景生活化", template: "Lifestyle brand photography of {subject} in an aspirational real-life setting. Natural warm lighting, editorial composition, premium brand feel." },
-        ],
-    };
-
-    const STYLE_OPTIONS = [
-        { value: "photorealistic", label: "写实摄影", suffix: "Photorealistic, shot on Phase One IQ4 150MP, 8K resolution, hyper-detailed skin and material textures." },
-        { value: "cinematic", label: "电影质感", suffix: "Cinematic film still quality, anamorphic lens, subtle film grain, professional color grading, ARRI Alexa 65 look." },
-        { value: "commercial", label: "商业广告", suffix: "Premium advertising quality, retouched to perfection, magazine-cover sharpness, high-end brand aesthetic." },
-        { value: "concept-art", label: "概念艺术", suffix: "Professional concept art for film production, painted realism, artstation trending quality, by senior visual development artist." },
-        { value: "anime", label: "日系动漫", suffix: "High-quality anime illustration style, clean lineart, cel shading, vibrant colors, studio-quality animation key visual." },
-        { value: "3d-render", label: "3D 渲染", suffix: "Photorealistic 3D render, Octane Render, global illumination, subsurface scattering, physically-based materials, 8K." },
-    ];
-
-    const doSend = async () => {
-        if (!sendPanel) return;
-        const { name, keywords, category } = sendPanel;
-        if (!keywords.trim()) { message.warning("该资产没有关键词"); setSendPanel(null); return; }
-        const options = FORMAT_OPTIONS[category] || FORMAT_OPTIONS.prop;
-        const fmt = options.find((o) => o.value === sendFormat);
-        const style = STYLE_OPTIONS.find((s) => s.value === sendStyle);
-        const body = fmt ? fmt.template.replace("{subject}", keywords) : keywords;
-        const finalPrompt = style ? `${body} ${style.suffix}` : body;
-        const store = usePromptStudioStore.getState();
-        if (!store.current) await store.createProject(`分镜资产-${current.title}`);
-        usePromptStudioStore.getState().addEntry({ input: name, platform: sendPlatform, prompt: finalPrompt, category, style: style?.label });
-        message.success(`「${name}」已发送到提示词工作台（${PLATFORM_LIST.find((p) => p.id === sendPlatform)?.label || sendPlatform}）`);
-        setSendPanel(null);
-    };
-
-    /** 批量导出到提示词工作台 */
-    const [batchOpen, setBatchOpen] = useState(false);
-    const [batchTypes, setBatchTypes] = useState<string[]>(["character", "scene", "prop", "product"]);
-    const [batchStyle, setBatchStyle] = useState("photorealistic");
-    const [batchPlatform, setBatchPlatform] = useState("midjourney");
-
-    /** 每种资产类型的默认视图格式 */
-    const DEFAULT_FORMAT: Record<string, string> = { character: "four-panel", scene: "wide", prop: "single", product: "hero" };
-    const TYPE_LABEL: Record<string, string> = { character: "角色", scene: "场景", prop: "道具", product: "产品" };
-
-    const typeItems = (type: string): { name: string; keywords: string }[] => {
-        if (type === "character") return assets.characters.map((c) => ({ name: c.name, keywords: c.keywords }));
-        if (type === "scene") return assets.locations.map((l) => ({ name: l.name, keywords: l.keywords }));
-        if (type === "prop") return assets.props.map((p) => ({ name: p.name, keywords: p.keywords }));
-        return assets.products.map((p) => ({ name: p.name, keywords: p.keywords }));
-    };
-
-    const doBatchSend = async () => {
-        const style = STYLE_OPTIONS.find((s) => s.value === batchStyle);
-        const store = usePromptStudioStore.getState();
-        if (!store.current) await store.createProject(`分镜资产-${current.title}`);
-        let count = 0;
-        for (const type of batchTypes) {
-            const options = FORMAT_OPTIONS[type] || FORMAT_OPTIONS.prop;
-            const fmt = options.find((o) => o.value === DEFAULT_FORMAT[type]);
-            for (const item of typeItems(type)) {
-                if (!item.keywords.trim()) continue;
-                const body = fmt ? fmt.template.replace("{subject}", item.keywords) : item.keywords;
-                const finalPrompt = style ? `${body} ${style.suffix}` : body;
-                usePromptStudioStore.getState().addEntry({ input: item.name, platform: batchPlatform, prompt: finalPrompt, category: type as PromptCategory, style: style?.label });
-                count++;
-            }
-        }
-        message.success(`已批量导出 ${count} 项资产到提示词工作台（${PLATFORM_LIST.find((p) => p.id === batchPlatform)?.label || batchPlatform}）`);
-        setBatchOpen(false);
-    };
-
     /** 重新生成单个资产 */
     const [regenId, setRegenId] = useState<string | null>(null);
     const regenerateOne = async (id: string, name: string, type: "characters" | "locations" | "props" | "products") => {
@@ -209,9 +113,11 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                             {extracting ? "AI 提取中..." : "AI 提取资产"}
                         </Button>
                     )}
-                    <Button icon={<Send className="size-4" />} disabled={total === 0} onClick={() => setBatchOpen(true)}>
-                        批量导出到提示词工作台
-                    </Button>
+                    {onExportToPrompt && (
+                        <Button icon={<Send className="size-4" />} disabled={total === 0} onClick={() => onExportToPrompt(current.id)}>
+                            导出到提示词工作台
+                        </Button>
+                    )}
                     <Button type="primary" disabled={total === 0} onClick={handleConfirm}>
                         确认资产（{total} 项）→ 下一步
                     </Button>
@@ -229,7 +135,6 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.characters}
                                 onAdd={() => setAssets({ ...assets, characters: [...assets.characters, { id: nanoid(), name: "新角色", appearance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, characters: assets.characters.filter((c) => c.id !== id) })}
-                                onSend={(c) => { setSendFormat("four-panel"); setSendPanel({ name: c.name, keywords: c.keywords, category: "character" }); }}
                                 onRegen={(c) => void regenerateOne(c.id, c.name, "characters")}
                                 regenId={regenId}
                                 render={(c: CharacterAsset) => (
@@ -254,7 +159,6 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.locations}
                                 onAdd={() => setAssets({ ...assets, locations: [...assets.locations, { id: nanoid(), name: "新场景", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, locations: assets.locations.filter((l) => l.id !== id) })}
-                                onSend={(l) => { setSendFormat("wide"); setSendPanel({ name: l.name, keywords: l.keywords, category: "scene" }); }}
                                 onRegen={(l) => void regenerateOne(l.id, l.name, "locations")}
                                 regenId={regenId}
                                 render={(l: LocationAsset) => (
@@ -281,7 +185,6 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.props}
                                 onAdd={() => setAssets({ ...assets, props: [...assets.props, { id: nanoid(), name: "新道具", description: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, props: assets.props.filter((p) => p.id !== id) })}
-                                onSend={(p) => { setSendFormat("single"); setSendPanel({ name: p.name, keywords: p.keywords, category: "prop" }); }}
                                 onRegen={(p) => void regenerateOne(p.id, p.name, "props")}
                                 regenId={regenId}
                                 render={(p: PropAsset) => (
@@ -305,7 +208,6 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                                 items={assets.products}
                                 onAdd={() => setAssets({ ...assets, products: [...assets.products, { id: nanoid(), name: "新产品", appearance: "", significance: "", keywords: "" }] })}
                                 onRemove={(id) => setAssets({ ...assets, products: assets.products.filter((p) => p.id !== id) })}
-                                onSend={(p) => { setSendFormat("hero"); setSendPanel({ name: p.name, keywords: p.keywords, category: "product" }); }}
                                 onRegen={(p) => void regenerateOne(p.id, p.name, "products")}
                                 regenId={regenId}
                                 render={(p: ProductAsset) => (
@@ -324,92 +226,16 @@ export function AssetExtraction({ config, onError }: { config: AiConfig; onError
                     },
                 ]}
             />
-
-            {/* 发送到提示词工作台 - 选择面板 */}
-            {sendPanel && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSendPanel(null)}>
-                    <div className="w-[380px] rounded-xl bg-white p-5 shadow-2xl dark:bg-stone-800" onClick={(e) => e.stopPropagation()}>
-                        <h4 className="mb-3 text-sm font-semibold">发送「{sendPanel.name}」到提示词工作台</h4>
-                        <div className="space-y-3">
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">视图 / 格式</p>
-                                <Radio.Group size="small" value={sendFormat} onChange={(e) => setSendFormat(e.target.value)} className="flex flex-col gap-1">
-                                    {(FORMAT_OPTIONS[sendPanel.category] || FORMAT_OPTIONS.prop).map((o) => (
-                                        <Radio key={o.value} value={o.value}>{o.label}</Radio>
-                                    ))}
-                                </Radio.Group>
-                            </div>
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">画面风格</p>
-                                <Select size="small" className="w-full" value={sendStyle} onChange={setSendStyle}
-                                    options={STYLE_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
-                                />
-                            </div>
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">目标平台</p>
-                                <Select size="small" className="w-full" value={sendPlatform} onChange={setSendPlatform}
-                                    options={PLATFORM_LIST.map((p) => ({ value: p.id, label: `${p.label}${p.category === "video" ? "（视频）" : ""}` }))}
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button size="small" onClick={() => setSendPanel(null)}>取消</Button>
-                                <Button size="small" type="primary" icon={<Send className="size-3.5" />} onClick={() => void doSend()}>确认发送</Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 批量导出到提示词工作台 */}
-            {batchOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setBatchOpen(false)}>
-                    <div className="w-[420px] rounded-xl bg-white p-5 shadow-2xl dark:bg-stone-800" onClick={(e) => e.stopPropagation()}>
-                        <h4 className="mb-1 text-sm font-semibold">批量导出资产到提示词工作台</h4>
-                        <p className="mb-3 text-xs text-stone-400">每类资产使用默认视图格式（角色=四宫格 / 场景=全景 / 道具=单物体 / 产品=主图），风格与平台统一应用</p>
-                        <div className="space-y-3">
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">选择资产类型</p>
-                                <Checkbox.Group value={batchTypes} onChange={(v) => setBatchTypes(v as string[])} className="flex flex-col gap-1">
-                                    {(["character", "scene", "prop", "product"] as const).map((t) => (
-                                        <Checkbox key={t} value={t} disabled={typeItems(t).length === 0}>
-                                            {TYPE_LABEL[t]}（{typeItems(t).length} 项）
-                                        </Checkbox>
-                                    ))}
-                                </Checkbox.Group>
-                            </div>
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">画面风格</p>
-                                <Select size="small" className="w-full" value={batchStyle} onChange={setBatchStyle}
-                                    options={STYLE_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
-                                />
-                            </div>
-                            <div>
-                                <p className="mb-1 text-xs text-stone-500">目标平台</p>
-                                <Select size="small" className="w-full" value={batchPlatform} onChange={setBatchPlatform}
-                                    options={PLATFORM_LIST.map((p) => ({ value: p.id, label: `${p.label}${p.category === "video" ? "（视频）" : ""}` }))}
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button size="small" onClick={() => setBatchOpen(false)}>取消</Button>
-                                <Button size="small" type="primary" icon={<Send className="size-3.5" />} disabled={batchTypes.length === 0} onClick={() => void doBatchSend()}>
-                                    批量导出
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
 
 // ─── 通用资产卡片列表 ───
-function AssetCardList<T extends { id: string; name: string; keywords: string }>({ items, empty, onAdd, onRemove, onSend, onRegen, regenId, render }: {
+function AssetCardList<T extends { id: string; name: string; keywords: string }>({ items, empty, onAdd, onRemove, onRegen, regenId, render }: {
     items: T[];
     empty: string;
     onAdd: () => void;
     onRemove: (id: string) => void;
-    onSend?: (item: T) => void;
     onRegen?: (item: T) => void;
     regenId?: string | null;
     render: (item: T) => React.ReactNode;
@@ -433,11 +259,6 @@ function AssetCardList<T extends { id: string; name: string; keywords: string }>
                             {onRegen && (
                                 <Tooltip title="AI 重新生成此项">
                                     <Button type="text" size="small" icon={<RefreshCw className={`size-3.5 ${regenId === item.id ? "animate-spin" : ""}`} />} className="opacity-0 transition group-hover:opacity-100" disabled={regenId === item.id} onClick={() => onRegen(item)} />
-                                </Tooltip>
-                            )}
-                            {onSend && (
-                                <Tooltip title="发送关键词到提示词工作台">
-                                    <Button type="text" size="small" icon={<Send className="size-3.5" />} className="opacity-0 transition group-hover:opacity-100" onClick={() => onSend(item)} />
                                 </Tooltip>
                             )}
                             <Popconfirm title="删除此资产？" onConfirm={() => onRemove(item.id)} okText="删除" cancelText="取消">

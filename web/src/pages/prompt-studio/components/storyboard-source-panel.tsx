@@ -16,6 +16,34 @@ type Props = {
 
 type FlatShot = Shot & { sceneId: string; sceneTitle: string };
 
+type FlatAsset = { id: string; type: "character" | "scene" | "prop" | "product"; label: string; input: string };
+
+const ASSET_TYPE_LABEL: Record<FlatAsset["type"], string> = { character: "角色", scene: "场景", prop: "道具", product: "产品" };
+
+/** 将资产组装为自然语言描述（含视图格式意图），作为提示词生成的输入 */
+function composeAssetInput(a: FlatAsset & { raw: Record<string, unknown> }): string {
+    const r = a.raw;
+    const name = (r.name as string) || "";
+    if (a.type === "character") {
+        return `角色「${name}」：${r.appearance || ""}${r.costume ? `，服装：${r.costume}` : ""}。需要角色设定图（四宫格：正脸/侧脸特写 + 正面/背面全身），纯白背景，无道具无场景。`;
+    }
+    if (a.type === "scene") {
+        return `场景「${name}」：${r.description || ""}${r.timeOfDay ? `，时间：${r.timeOfDay}` : ""}${r.lighting ? `，光线：${r.lighting}` : ""}。全景建立镜头。`;
+    }
+    if (a.type === "prop") {
+        return `道具「${name}」：${r.description || ""}。孤立物体，纯白背景，影棚布光，产品摄影特写。`;
+    }
+    return `产品「${name}」：${r.appearance || ""}${r.packaging ? `，包装：${r.packaging}` : ""}。商业产品主图，纯白背景，三点布光。`;
+}
+
+/** 项目是否含可用素材（画面描述或资产） */
+function hasSourceMaterial(p: StoryboardProject): boolean {
+    const hasShots = (p.scenes ?? []).some((s) => (s.shots ?? []).some((sh) => (sh.visualDescription ?? "").trim()));
+    const a = p.assets;
+    const assetCount = (a?.characters?.length ?? 0) + (a?.locations?.length ?? 0) + (a?.props?.length ?? 0) + (a?.products?.length ?? 0);
+    return hasShots || assetCount > 0;
+}
+
 /**
  * 分镜素材面板（双栏工作台左栏）
  * 实时读取分镜项目的画面描述，按场景分组、可勾选/编辑，批量生成多平台提示词
@@ -28,6 +56,8 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
     const [selectedId, setSelectedId] = useState<string>("");
     const [checkedShots, setCheckedShots] = useState<Set<string>>(new Set());
     const [editedDescriptions, setEditedDescriptions] = useState<Map<string, string>>(new Map());
+    const [checkedAssets, setCheckedAssets] = useState<Set<string>>(new Set());
+    const [editedAssetInputs, setEditedAssetInputs] = useState<Map<string, string>>(new Map());
     const [progress, setProgress] = useState({ done: 0, total: 0 });
 
     // 加载分镜项目列表（仅含已生成画面描述的项目）
@@ -35,7 +65,7 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
         void getStoryboardRepo()
             .list()
             .then((list) => {
-                const eligible = list.filter((p) => (p.scenes ?? []).some((s) => (s.shots ?? []).some((sh) => (sh.visualDescription ?? "").trim())));
+                const eligible = list.filter(hasSourceMaterial);
                 setProjects(eligible);
                 if (sourceStoryboardId && eligible.some((p) => p.id === sourceStoryboardId)) {
                     setSelectedId(sourceStoryboardId);
@@ -69,6 +99,38 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
         setEditedDescriptions(new Map());
     }, [selectedId, project]);
 
+    // 扁平化资产（可勾选素材）
+    const assetItems = useMemo<FlatAsset[]>(() => {
+        const a = project?.assets;
+        if (!a) return [];
+        const build = (list: Record<string, unknown>[] | undefined, type: FlatAsset["type"]): FlatAsset[] =>
+            (list ?? []).map((raw) => {
+                const item = { id: (raw.id as string) || "", type, label: (raw.name as string) || "", input: "", raw };
+                return { id: item.id, type, label: item.label, input: composeAssetInput(item) };
+            });
+        return [
+            ...build(a.characters as Record<string, unknown>[], "character"),
+            ...build(a.locations as Record<string, unknown>[], "scene"),
+            ...build(a.props as Record<string, unknown>[], "prop"),
+            ...build(a.products as Record<string, unknown>[], "product"),
+        ];
+    }, [project]);
+
+    // 项目切换时资产默认全选
+    useEffect(() => {
+        setCheckedAssets(new Set(assetItems.map((it) => it.id)));
+        setEditedAssetInputs(new Map());
+    }, [assetItems]);
+
+    const toggleAsset = (id: string) => {
+        setCheckedAssets((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const toggleShot = (shotId: string) => {
         setCheckedShots((prev) => {
             const next = new Set(prev);
@@ -95,9 +157,13 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
     const handleGenerate = async () => {
         if (!project) return;
         const allShots = sceneGroups.flatMap((g) => g.shots);
-        const selected = allShots.filter((sh) => checkedShots.has(sh.id));
-        if (selected.length === 0) {
-            message.warning("请至少勾选一个镜头");
+        const selectedShots = allShots.filter((sh) => checkedShots.has(sh.id));
+        const selectedAssets = assetItems.filter((it) => checkedAssets.has(it.id));
+        const shotInputs = selectedShots.map((sh) => editedDescriptions.get(sh.id) ?? sh.visualDescription);
+        const assetInputs = selectedAssets.map((it) => editedAssetInputs.get(it.id) ?? it.input);
+        const inputs = [...shotInputs, ...assetInputs];
+        if (inputs.length === 0) {
+            message.warning("请至少勾选一个镜头或资产");
             return;
         }
         if (selectedPlatforms.length === 0) {
@@ -107,7 +173,6 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
         if (!current) {
             await createProject(`提示词-${project.title}`);
         }
-        const inputs = selected.map((sh) => editedDescriptions.get(sh.id) ?? sh.visualDescription);
         const totalTasks = inputs.length * selectedPlatforms.length;
         setGenerating(true);
         setProgress({ done: 0, total: totalTasks });
@@ -116,7 +181,9 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
             for (const platform of selectedPlatforms) {
                 const results = await aiBatchGeneratePrompts(config, inputs, platform, selectedStyle || undefined, undefined, () => {});
                 results.forEach((result, i) => {
-                    addEntry({ input: inputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, style: selectedStyle || undefined, category: "general" });
+                    const isAsset = i >= shotInputs.length;
+                    const category = isAsset ? selectedAssets[i - shotInputs.length].type : "general";
+                    addEntry({ input: inputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, style: selectedStyle || undefined, category });
                 });
                 done += results.length;
                 setProgress({ done, total: totalTasks });
@@ -135,13 +202,10 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
             <div className="flex h-full flex-col items-center justify-center gap-3 text-stone-400">
                 <Clapperboard className="size-10 text-stone-300 dark:text-stone-700" />
                 <p className="text-sm">暂无可用分镜项目</p>
-                <p className="text-xs">请先在分镜流程完成画面描述生成</p>
+                <p className="text-xs">请先在分镜流程提取资产或完成画面描述生成</p>
             </div>
         );
     }
-
-    const assets = project?.assets;
-    const hasAssets = assets && ((assets.characters?.length ?? 0) > 0 || (assets.locations?.length ?? 0) > 0 || (assets.props?.length ?? 0) > 0 || (assets.products?.length ?? 0) > 0);
 
     return (
         <div className="flex h-full flex-col">
@@ -152,10 +216,12 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
                     placeholder="选择分镜项目"
                     value={selectedId || undefined}
                     onChange={setSelectedId}
-                    options={projects.map((p) => ({
-                        label: `${p.title}（${(p.scenes ?? []).reduce((s, sc) => s + (sc.shots ?? []).filter((sh) => (sh.visualDescription ?? "").trim()).length, 0)} 镜头）`,
-                        value: p.id,
-                    }))}
+                    options={projects.map((p) => {
+                        const shotCount = (p.scenes ?? []).reduce((s, sc) => s + (sc.shots ?? []).filter((sh) => (sh.visualDescription ?? "").trim()).length, 0);
+                        const a = p.assets;
+                        const assetCount = (a?.characters?.length ?? 0) + (a?.locations?.length ?? 0) + (a?.props?.length ?? 0) + (a?.products?.length ?? 0);
+                        return { label: `${p.title}（${shotCount} 镜头 · ${assetCount} 资产）`, value: p.id };
+                    })}
                 />
             </div>
 
@@ -214,39 +280,45 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
                     />
                 )}
 
-                {/* 资产参考 */}
-                {hasAssets && assets && (
+                {/* 资产素材（可勾选/编辑，参与生成） */}
+                {assetItems.length > 0 && (
                     <Collapse
                         className="mt-3"
                         size="small"
+                        defaultActiveKey={["assets"]}
                         items={[
                             {
                                 key: "assets",
-                                label: <span className="text-xs font-medium text-stone-500">资产参考</span>,
+                                label: <span className="text-xs font-medium text-stone-500">资产素材（{assetItems.length}）</span>,
+                                extra: (
+                                    <Button
+                                        type="link"
+                                        size="small"
+                                        className="!text-xs"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCheckedAssets((prev) => (prev.size === assetItems.length ? new Set() : new Set(assetItems.map((it) => it.id))));
+                                        }}
+                                    >
+                                        {checkedAssets.size === assetItems.length ? "取消全选" : "全选"}
+                                    </Button>
+                                ),
                                 children: (
-                                    <div className="space-y-2 text-xs text-stone-500">
-                                        {(assets.characters ?? []).map((c) => (
-                                            <div key={c.id}>
-                                                <span className="font-medium text-stone-600 dark:text-stone-300">角色 | {c.name}</span>
-                                                <span className="ml-2 text-stone-400">{c.appearance}{c.costume ? `，${c.costume}` : ""}</span>
-                                            </div>
-                                        ))}
-                                        {(assets.locations ?? []).map((l) => (
-                                            <div key={l.id}>
-                                                <span className="font-medium text-stone-600 dark:text-stone-300">场景 | {l.name}</span>
-                                                <span className="ml-2 text-stone-400">{l.description}</span>
-                                            </div>
-                                        ))}
-                                        {(assets.props ?? []).map((p) => (
-                                            <div key={p.id}>
-                                                <span className="font-medium text-stone-600 dark:text-stone-300">道具 | {p.name}</span>
-                                                <span className="ml-2 text-stone-400">{p.description}</span>
-                                            </div>
-                                        ))}
-                                        {(assets.products ?? []).map((p) => (
-                                            <div key={p.id}>
-                                                <span className="font-medium text-stone-600 dark:text-stone-300">产品 | {p.name}</span>
-                                                <span className="ml-2 text-stone-400">{p.appearance}{p.significance ? `，${p.significance}` : ""}</span>
+                                    <div className="space-y-2.5">
+                                        {assetItems.map((it) => (
+                                            <div key={it.id} className="rounded-md border border-stone-100 p-2 dark:border-stone-800">
+                                                <div className="mb-1.5 flex items-center gap-2">
+                                                    <Checkbox checked={checkedAssets.has(it.id)} onChange={() => toggleAsset(it.id)} />
+                                                    <Tag className="m-0 scale-75" color="purple">{ASSET_TYPE_LABEL[it.type]}</Tag>
+                                                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-stone-600 dark:text-stone-300">{it.label}</span>
+                                                </div>
+                                                <Input.TextArea
+                                                    value={editedAssetInputs.get(it.id) ?? it.input}
+                                                    onChange={(e) => setEditedAssetInputs((prev) => new Map(prev).set(it.id, e.target.value))}
+                                                    autoSize={{ minRows: 1, maxRows: 4 }}
+                                                    className="!text-xs"
+                                                    placeholder="资产描述（用于生成提示词）"
+                                                />
                                             </div>
                                         ))}
                                     </div>
@@ -264,10 +336,10 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId }: P
                     block
                     icon={generating ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                     loading={generating}
-                    disabled={checkedShots.size === 0}
+                    disabled={checkedShots.size + checkedAssets.size === 0}
                     onClick={handleGenerate}
                 >
-                    生成选中（{checkedShots.size} 镜头 x {selectedPlatforms.length} 平台）
+                    生成选中（{checkedShots.size} 镜头 + {checkedAssets.size} 资产 × {selectedPlatforms.length} 平台）
                 </Button>
                 {generating && progress.total > 0 && <Progress percent={Math.round((progress.done / progress.total) * 100)} className="mt-2" size="small" format={() => `${progress.done}/${progress.total}`} />}
             </div>

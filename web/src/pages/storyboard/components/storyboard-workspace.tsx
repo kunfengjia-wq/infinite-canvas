@@ -82,7 +82,7 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
     const renderEditPanel = () => {
         switch (step) {
             case 1: return <ScriptInput config={config} />;
-            case 2: return <AssetExtraction config={config} onError={(msg) => message.error(msg)} />;
+            case 2: return <AssetExtraction config={config} onError={(msg) => message.error(msg)} onExportToPrompt={onExportToPrompt} />;
             case 3: return <SceneList config={config} onError={(msg) => message.error(msg)} />;
             case 4: return <ShotEditor config={config} onError={(msg) => message.error(msg)} />;
             case 5: return <DescriptionReview config={config} onError={(msg) => message.error(msg)} onExportToPrompt={onExportToPrompt} />;
