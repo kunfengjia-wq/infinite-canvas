@@ -4,6 +4,8 @@ node_modules/
 .env*
 !.env.example
 data/
+# 豁免前端源代码中的数据模块目录（cinematography/mood-atmosphere/visual-styles 等）
+!web/src/data/
 *.log
 *.tsbuildinfo
 .DS_Store
