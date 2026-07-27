@@ -148,6 +148,8 @@ export type PromptEntry = {
     styles?: { id: string; weight: number }[];
     customStyle?: string;
     category: PromptCategory;
+    /** 用户反馈评分：1=点赞（正面），-1=劣质（负面），null/undefined=未评价 */
+    rating?: 1 | -1 | null;
 };
 
 /** 提示词项目 */

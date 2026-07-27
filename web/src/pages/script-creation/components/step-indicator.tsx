@@ -1,0 +1,42 @@
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { CreationPhase } from "@/types/script-creation";
+
+type PhaseMeta = { phase: CreationPhase; label: string; description: string };
+
+export function StepIndicator({ phases, current }: { phases: PhaseMeta[]; current: number }) {
+    return (
+        <div className="flex items-center gap-2">
+            {phases.map((p, i) => {
+                const isDone = current > p.phase;
+                const isActive = current === p.phase;
+                return (
+                    <div key={p.phase} className="flex items-center gap-2">
+                        {i > 0 && <div className={cn("h-px w-6", isDone || isActive ? "bg-blue-400" : "bg-stone-200 dark:bg-stone-700")} />}
+                        <div
+                            className={cn(
+                                "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                                isActive && "bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800",
+                                isDone && "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+                                !isActive && !isDone && "text-stone-400",
+                            )}
+                            title={p.description}
+                        >
+                            <span
+                                className={cn(
+                                    "flex size-4 items-center justify-center rounded-full text-[10px]",
+                                    isActive && "bg-blue-600 text-white",
+                                    isDone && "bg-emerald-500 text-white",
+                                    !isActive && !isDone && "bg-stone-200 text-stone-500 dark:bg-stone-700",
+                                )}
+                            >
+                                {isDone ? <Check className="size-2.5" /> : p.phase}
+                            </span>
+                            {p.label}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}

@@ -1,9 +1,10 @@
-import { Copy, LoaderCircle, RefreshCw, Sparkles, Star, Trash2 } from "lucide-react";
+import { Copy, LoaderCircle, RefreshCw, Sparkles, Star, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Empty, Input, Popconfirm, Tag, Tooltip } from "antd";
 
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiGeneratePrompt, aiOptimizePrompt, aiScorePrompt, type QualityScoreResult } from "@/services/prompt-studio-ai";
+import { submitFeedback, revokeFeedback } from "@/services/db/feedback-repo";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
 import { PLATFORM_LIST, PROMPT_CATEGORIES, STYLE_PRESETS, type PromptCategory } from "@/types/prompt-studio";
@@ -69,6 +70,23 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         }
     };
 
+    const handleFeedback = (entryId: string, prompt: string, negativePrompt: string | undefined, platform: string, input: string, styles: { id: string; weight: number }[] | undefined, rating: 1 | -1) => {
+        const entry = current?.entries.find((e) => e.id === entryId);
+        const currentRating = entry?.rating ?? null;
+
+        if (currentRating === rating) {
+            // 取消评价
+            updateEntry(entryId, { rating: null });
+            revokeFeedback(prompt, platform);
+            message.info("已取消评价");
+        } else {
+            // 设置/切换评价
+            updateEntry(entryId, { rating });
+            submitFeedback({ prompt, negativePrompt, platform, inputText: input, styles, rating });
+            message.success(rating === 1 ? "已点赞，将作为正面示例" : "已标记劣质，将规避此类输出");
+        }
+    };
+
     return (
         <section>
             <div className="mb-3 flex items-center justify-between">
@@ -103,6 +121,12 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                 {entry.assetRef && <Tag color="green">{entry.assetRef}</Tag>}
                                 <span className="min-w-0 flex-1 whitespace-normal break-all text-xs leading-relaxed text-stone-400">{entry.input}</span>
                                 <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                                    <Tooltip title="点赞：加入正面提示词库">
+                                        <Button type="text" size="small" icon={<ThumbsUp className={cn("size-3.5", entry.rating === 1 && "fill-green-500 text-green-500")} />} onClick={() => handleFeedback(entry.id, entry.prompt, entry.negativePrompt, entry.platform, entry.input, entry.styles, 1)} />
+                                    </Tooltip>
+                                    <Tooltip title="劣质：加入负面规避库">
+                                        <Button type="text" size="small" icon={<ThumbsDown className={cn("size-3.5", entry.rating === -1 && "fill-red-500 text-red-500")} />} onClick={() => handleFeedback(entry.id, entry.prompt, entry.negativePrompt, entry.platform, entry.input, entry.styles, -1)} />
+                                    </Tooltip>
                                     <Button type="text" size="small" icon={regeneratingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} disabled={regeneratingId === entry.id} onClick={() => handleRegenerate(entry.id, entry.input, entry.platform, entry.styles, entry.customStyle)} title="重新生成" />
                                     <Tooltip title="AI 优化提示词">
                                         <Button type="text" size="small" icon={optimizingId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} disabled={optimizingId === entry.id} onClick={() => handleOptimize(entry.id, entry.prompt, entry.platform)} />

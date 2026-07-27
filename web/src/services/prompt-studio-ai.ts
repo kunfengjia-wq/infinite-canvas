@@ -9,6 +9,7 @@ import { PLATFORM_LIST, STYLE_PRESETS } from "@/types/prompt-studio";
 import { supabase } from "@/services/db/supabase-client";
 import { getSkillPrompt } from "@/services/db/skills-repo";
 import { recordGeneration } from "@/services/db/history-repo";
+import { getPositiveExamples, getNegativeExamples } from "@/services/db/feedback-repo";
 
 // ─── Few-shot 示例（从 Supabase 数据集获取）─────────────────────
 
@@ -74,6 +75,38 @@ async function getFewShotExamples(platform: PromptPlatform): Promise<string> {
         return result;
     } catch {
         fewShotCache.set(datasetPlatform, "");
+        return "";
+    }
+}
+
+// ─── 后端状态查询（供 UI 展示当前生成配置）─────────────────────
+
+/** 用户反馈注入：正面示例 + 负面规避（优先级高于数据集 few-shot） */
+async function getFeedbackInjection(platform: PromptPlatform): Promise<string> {
+    try {
+        const [positives, negatives] = await Promise.all([
+            getPositiveExamples(platform, 2),
+            getNegativeExamples(platform, 3),
+        ]);
+
+        let injection = "";
+
+        if (positives.length > 0) {
+            const lines = positives.map((p, i) => `正面${i + 1}：${p.prompt}`).join("\n");
+            injection += `\n\n【用户认可的高质量示例（优先模仿其风格和结构）】\n${lines}`;
+        }
+
+        if (negatives.length > 0) {
+            const lines = negatives.map((p, i) => `劣质${i + 1}：${p.prompt}`).join("\n");
+            injection += `\n\n【用户标记的低质量示例（必须规避以下写法和问题）】\n${lines}`;
+        }
+
+        if (injection) {
+            injection += `\n\n【反馈优先级声明】用户反馈 > 数据集参考示例 > 通用规则。若正面示例与负面示例存在冲突，以规避负面为主。`;
+        }
+
+        return injection;
+    } catch {
         return "";
     }
 }
@@ -363,9 +396,11 @@ export async function aiGeneratePrompt(config: AiConfig, request: PromptGenerate
 
     // 从数据集获取 few-shot 示例，增强生成质量
     const fewShot = await getFewShotExamples(request.platform);
+    // 用户反馈注入（正面示例+负面规避），优先级高于数据集 few-shot
+    const feedbackInjection = await getFeedbackInjection(request.platform);
     // 通用铁律按图片/视频区分注入，置于平台 skill 之后、示例之前；优先级声明置于示例之后
     const universal = getUniversalRules(platformMeta?.category ?? "image");
-    const systemContent = platformSkill + universal + fewShot + PRIORITY_OVER_FEWSHOT + CHINESE_CONTRAST_SUFFIX;
+    const systemContent = platformSkill + universal + fewShot + feedbackInjection + PRIORITY_OVER_FEWSHOT + CHINESE_CONTRAST_SUFFIX;
 
     // 构建用户消息
     let userContent = `以下是分镜数据，请根据目标平台规则转化为提示词：\n\n${request.input}`;

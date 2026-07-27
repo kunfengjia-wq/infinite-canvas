@@ -1,4 +1,4 @@
-import { Clapperboard, FileText, ImagePlus, Images, Maximize2, Settings2, Video } from "lucide-react";
+import { Clapperboard, FileText, ImagePlus, Images, Maximize2, PenLine, Settings2, Video } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -20,6 +20,11 @@ export const navigationTools = [
         slug: "storyboard",
         label: "分镜工作台",
         icon: Clapperboard,
+    },
+    {
+        slug: "script",
+        label: "剧本创作",
+        icon: PenLine,
     },
     {
         slug: "prompts",

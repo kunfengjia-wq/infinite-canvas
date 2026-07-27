@@ -9,6 +9,7 @@ import type { Repository } from "./index";
 
 const TABLE_STORYBOARD = "storyboard_projects";
 const TABLE_PROMPT = "prompt_projects";
+const TABLE_SCRIPT = "script_projects";
 
 /** 通用 Supabase 仓库（JSONB 存储整个项目对象） */
 function createSupabaseRepo<T extends { id: string; updatedAt: string }>(table: string): Repository<T> {
@@ -40,6 +41,7 @@ function createSupabaseRepo<T extends { id: string; updatedAt: string }>(table: 
 
 export const supabaseStoryboardRepo = createSupabaseRepo<any>(TABLE_STORYBOARD);
 export const supabasePromptProjectRepo = createSupabaseRepo<any>(TABLE_PROMPT);
+export const supabaseScriptProjectRepo = createSupabaseRepo<any>(TABLE_SCRIPT);
 
 /**
  * 混合同步仓库：本地优先 + 后台远程同步
