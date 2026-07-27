@@ -50,6 +50,25 @@ export default defineConfig({
         __APP_VERSION__: JSON.stringify(localVersion),
         __APP_RELEASES__: JSON.stringify(parseChangelog(localChangelog)),
     },
+    build: {
+        // 主 bundle 体积较大，调高警告阈值（单位 kB）
+        chunkSizeWarningLimit: 1600,
+        rollupOptions: {
+            output: {
+                // 按依赖拆包，避免单个主 chunk 过大，改善首屏加载与缓存
+                manualChunks(id) {
+                    if (!id.includes("node_modules")) return;
+                    if (id.includes("antd") || id.includes("@ant-design") || id.includes("@emotion") || id.includes("/motion/")) return "antd-vendor";
+                    if (id.includes("codemirror")) return "editor-vendor";
+                    if (id.includes("pdfjs-dist") || id.includes("jspdf") || id.includes("html2canvas")) return "pdf-vendor";
+                    if (id.includes("@supabase")) return "supabase-vendor";
+                    if (id.includes("@dnd-kit")) return "dnd-vendor";
+                    if (id.includes("react-router") || id.includes("react-dom") || id.includes("node_modules/react/") || id.includes("scheduler")) return "react-vendor";
+                    if (id.includes("@tanstack") || id.includes("zustand")) return "state-vendor";
+                },
+            },
+        },
+    },
     server: {
         proxy: {
             // 开发环境代理：解决百炼等 AI API 的 CORS 限制

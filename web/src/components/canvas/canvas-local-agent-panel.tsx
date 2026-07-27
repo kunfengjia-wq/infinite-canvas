@@ -1052,13 +1052,17 @@ async function postState(endpoint: string, token: string, clientId: string, snap
             headers: { "content-type": "application/json" },
             body: JSON.stringify(snapshot ? { ...snapshot, hasCanvas: true } : { hasCanvas: false }),
         });
-    } catch {}
+    } catch {
+        /* 忽略：画布状态上报失败无需中断流程 */
+    }
 }
 
 async function activateAgentClient(endpoint: string, token: string, clientId: string) {
     try {
         await fetch(`${endpoint}/canvas/activate?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`, { method: "POST" });
-    } catch {}
+    } catch {
+        /* 忽略：激活请求失败无需中断流程 */
+    }
 }
 
 async function postToolResult(endpoint: string, token: string, clientId: string, body: { requestId: string; result?: unknown; error?: string }) {

@@ -12,6 +12,7 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
     const { message } = App.useApp();
     const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
     const [extracting, setExtracting] = useState(false);
+    const [regenId, setRegenId] = useState<string | null>(null);
 
     if (!current) return null;
     const assets = {
@@ -67,7 +68,6 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
     const total = assets.characters.length + assets.locations.length + assets.props.length + assets.products.length;
 
     /** 重新生成单个资产 */
-    const [regenId, setRegenId] = useState<string | null>(null);
     const regenerateOne = async (id: string, name: string, type: "characters" | "locations" | "props" | "products") => {
         setRegenId(id);
         setProcessing(true);
