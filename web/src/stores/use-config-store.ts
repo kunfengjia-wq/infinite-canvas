@@ -62,8 +62,8 @@ export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
-const DASHSCOPE_BASE_URL = "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com/compatible-mode";
-const DASHSCOPE_API_KEY = "sk-ws-H.EIMDIRE.FfnB.MEUCIQCN-NDrTCFEuXFEewMRfnOTq6BwAwADzMltBbHWH4uIVgIgceldpHqX3NYS1UqGelnZ30Shu3sNUk5y3b75EsVJ_EQ";
+const DASHSCOPE_BASE_URL = import.meta.env.VITE_DASHSCOPE_BASE_URL || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com/compatible-mode";
+const DASHSCOPE_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY || "";
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
