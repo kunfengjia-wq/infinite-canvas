@@ -93,16 +93,16 @@ async function getFeedbackInjection(platform: PromptPlatform): Promise<string> {
 
         if (positives.length > 0) {
             const lines = positives.map((p, i) => `正面${i + 1}：${p.prompt}`).join("\n");
-            injection += `\n\n【用户认可的高质量示例（优先模仿其风格和结构）】\n${lines}`;
+            injection += `\n\n【用户认可的高质量示例（仅供参考风格和结构，不要照搬，保持多样性）】\n${lines}`;
         }
 
         if (negatives.length > 0) {
             const lines = negatives.map((p, i) => `劣质${i + 1}：${p.prompt}`).join("\n");
-            injection += `\n\n【用户标记的低质量示例（必须规避以下写法和问题）】\n${lines}`;
+            injection += `\n\n【用户不太满意的示例（参考其问题方向，尝试不同的表达组合）】\n${lines}`;
         }
 
         if (injection) {
-            injection += `\n\n【反馈优先级声明】用户反馈 > 数据集参考示例 > 通用规则。若正面示例与负面示例存在冲突，以规避负面为主。`;
+            injection += `\n\n【反馈使用说明】以上用户反馈仅作参考，核心仍遵循平台规则和通用铁律。避免与正面示例过度相似导致同质化。`;
         }
 
         return injection;

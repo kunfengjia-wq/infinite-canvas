@@ -83,7 +83,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
             // 设置/切换评价
             updateEntry(entryId, { rating });
             submitFeedback({ prompt, negativePrompt, platform, inputText: input, styles, rating });
-            message.success(rating === 1 ? "已点赞，将作为正面示例" : "已标记劣质，将规避此类输出");
+            message.success(rating === 1 ? "已点赞，将作为正面参考" : "已标记，将参考调整方向");
         }
     };
 
