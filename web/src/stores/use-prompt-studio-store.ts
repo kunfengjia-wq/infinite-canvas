@@ -35,7 +35,7 @@ type PromptStudioStore = {
     /** 批量添加条目（AI 生成后） */
     addEntries: (entries: Omit<PromptEntry, "id">[]) => void;
     /** 更新单条 */
-    updateEntry: (entryId: string, patch: Partial<Pick<PromptEntry, "prompt" | "negativePrompt" | "category" | "styles" | "customStyle" | "translation" | "assetRef" | "rating">>) => void;
+    updateEntry: (entryId: string, patch: Partial<Pick<PromptEntry, "prompt" | "negativePrompt" | "category" | "styles" | "customStyle" | "translation" | "characterMapping" | "assetRef" | "rating">>) => void;
     /** 删除单条 */
     removeEntry: (entryId: string) => void;
     /** 清空当前项目条目 */

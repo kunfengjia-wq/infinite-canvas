@@ -103,6 +103,78 @@ keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔�
 {"characters":[...],"locations":[...],"props":[...],"products":[...]}`;
 
 export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
+    // 超长剧本分块提取（每块约 6000 字，避免超出模型 token 限制导致只识别一部分）
+    const CHUNK_SIZE = 6000;
+    if (script.length <= CHUNK_SIZE) {
+        return extractAssetsSingle(config, script, onDelta);
+    }
+
+    // 按段落/场景标记分块（优先在自然断点切割）
+    const chunks = splitScriptIntoChunks(script, CHUNK_SIZE);
+    const allResults: StoryAssets[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+        onDelta?.(`正在提取第 ${i + 1}/${chunks.length} 段...\n`);
+        const result = await extractAssetsSingle(config, chunks[i], undefined);
+        allResults.push(result);
+    }
+
+    // 合并去重（按 name 去重）
+    return mergeAssets(allResults);
+}
+
+/** 将超长剧本按自然断点分块 */
+function splitScriptIntoChunks(script: string, maxSize: number): string[] {
+    const chunks: string[] = [];
+    // 先按场景标记分割（如 "第N场"、"INT."、"EXT."、空行等）
+    const segments = script.split(/(?=(?:第[\d一二三四五六七八九十]+场|INT\.|EXT\.|SCENE\s*\d+|\n\s*\n))/i);
+
+    let current = "";
+    for (const seg of segments) {
+        if ((current + seg).length > maxSize && current.length > 0) {
+            chunks.push(current.trim());
+            current = seg;
+        } else {
+            current += seg;
+        }
+    }
+    if (current.trim()) chunks.push(current.trim());
+
+    // 如果某个 chunk 仍然超长，硬切
+    const finalChunks: string[] = [];
+    for (const chunk of chunks) {
+        if (chunk.length <= maxSize * 1.5) {
+            finalChunks.push(chunk);
+        } else {
+            for (let i = 0; i < chunk.length; i += maxSize) {
+                finalChunks.push(chunk.slice(i, i + maxSize));
+            }
+        }
+    }
+    return finalChunks;
+}
+
+/** 合并多块提取结果，按 name 去重 */
+function mergeAssets(results: StoryAssets[]): StoryAssets {
+    const merged: StoryAssets = { characters: [], locations: [], props: [], products: [] };
+    const seen = { characters: new Set<string>(), locations: new Set<string>(), props: new Set<string>(), products: new Set<string>() };
+
+    for (const result of results) {
+        for (const key of ["characters", "locations", "props", "products"] as const) {
+            for (const item of result[key] ?? []) {
+                const name = (item as { name?: string }).name?.trim().toLowerCase();
+                if (name && !seen[key].has(name)) {
+                    seen[key].add(name);
+                    (merged[key] as unknown[]).push(item);
+                }
+            }
+        }
+    }
+    return merged;
+}
+
+/** 单次资产提取（原始逻辑） */
+async function extractAssetsSingle(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
     return withRetry(async () => {
         // 始终使用本地规范（含 keywords 分类型规则），不被远程旧版覆盖
         const systemPrompt = ASSET_EXTRACTOR_SYSTEM;
@@ -163,6 +235,30 @@ const SCENE_SPLITTER_SYSTEM = `你是一位专业的影视分镜师，擅长广�
 [{"title":"第1场：教室-白天","summary":"老师宣布考试成绩，主角紧张等待","scriptExcerpt":"老师站在讲台上...","timeRange":"00:00-00:15","mood":"紧张","colorTone":"冷白日光调"}]`;
 
 export async function aiSplitScenes(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<AiSceneResult[]> {
+    // 超长剧本分块拆分场景
+    const CHUNK_SIZE = 6000;
+    if (script.length <= CHUNK_SIZE) {
+        return splitScenesSingle(config, script, onDelta);
+    }
+
+    const chunks = splitScriptIntoChunks(script, CHUNK_SIZE);
+    const allScenes: AiSceneResult[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+        onDelta?.(`正在拆分第 ${i + 1}/${chunks.length} 段场景...\n`);
+        const scenes = await splitScenesSingle(config, chunks[i], undefined);
+        allScenes.push(...scenes);
+    }
+
+    // 重新编号场景标题
+    return allScenes.map((scene, idx) => ({
+        ...scene,
+        title: scene.title.replace(/^第[\d一二三四五六七八九十百]+场/, `第${idx + 1}场`) || `第${idx + 1}场：${scene.title}`,
+    }));
+}
+
+/** 单次场景拆分（原始逻辑） */
+async function splitScenesSingle(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<AiSceneResult[]> {
     return withRetry(async () => {
         const systemPrompt = (await getSkillPrompt("sb_scene_split")) ?? SCENE_SPLITTER_SYSTEM;
         const fewShot = await getStoryboardFewShot("scene_split");

@@ -35,7 +35,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         setRegeneratingId(entryId);
         try {
             const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles, customStyle });
-            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation });
+            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
             message.success("已重新生成");
         } catch (error) {
             onError(error instanceof Error ? error.message : "重新生成失败");
@@ -48,7 +48,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         setOptimizingId(entryId);
         try {
             const result = await aiOptimizePrompt(config, prompt, platform as never);
-            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation });
+            updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
             message.success(result.note ? `已优化：${result.note}` : "已优化");
         } catch (error) {
             onError(error instanceof Error ? error.message : "优化失败");
@@ -161,6 +161,12 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                 <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 p-2 dark:border-emerald-900 dark:bg-emerald-950/40">
                                     <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">中文对照</span>
                                     <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-stone-600 dark:text-stone-300">{entry.translation}</p>
+                                </div>
+                            )}
+                            {entry.characterMapping && (
+                                <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 dark:border-blue-900 dark:bg-blue-950/40">
+                                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">🎭 角色映射（方便识别角色去 @资产）</span>
+                                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-stone-600 dark:text-stone-300">{entry.characterMapping}</p>
                                 </div>
                             )}
                             {scoreResults[entry.id] && (

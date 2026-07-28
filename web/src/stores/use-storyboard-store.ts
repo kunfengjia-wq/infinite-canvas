@@ -16,6 +16,8 @@ type StoryboardStore = {
     processing: boolean;
     /** 加载状态 */
     loading: boolean;
+    /** 新建项目计数器（递增强制 ScriptInput 重挂载） */
+    formResetKey: number;
 
     // ─── 项目操作 ───
     loadProjects: () => Promise<void>;
@@ -71,6 +73,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     step: 1,
     processing: false,
     loading: false,
+    formResetKey: 0,
 
     loadProjects: async () => {
         set({ loading: true });

@@ -143,6 +143,8 @@ export type PromptEntry = {
     negativePrompt?: string;
     /** 中文对照：生成提示词的通俗中文翻译，便于不懂英文的用户理解与核对 */
     translation?: string;
+    /** 角色映射：中文名=英文描述片段，帮助用户识别英文提示词中的角色对应资产 */
+    characterMapping?: string;
     /** 资产来源标注：如「角色：小明」「镜头」，确定性带入、不依赖 AI */
     assetRef?: string;
     styles?: { id: string; weight: number }[];

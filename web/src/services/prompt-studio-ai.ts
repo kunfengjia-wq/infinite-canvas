@@ -340,6 +340,8 @@ export type PromptGenerateResult = {
     negativePrompt?: string;
     /** 中文对照：提示词正文的通俗中文翻译 */
     translation?: string;
+    /** 角色映射：中文名 = 英文描述片段，帮助用户识别角色对应资产 */
+    characterMapping?: string;
 };
 
 // ─── 跨平台通用铁律（所有平台 skill 之外统一注入）────────────────
@@ -354,12 +356,14 @@ const UNIVERSAL_RULES_COMMON = `
 1. 角色/产品的专有名字（如“林悦”“陈朗”）对生成模型没有任何视觉意义，必须替换为具体外观描述（性别、发色发型、服装、体型、配饰等）。
 2. 抽象情绪与叙事意图（嘲讽、悬念、张力、悲伤、对峙）无法被直接渲染，必须转化为可见的肢体动作、面部表情或具体视觉元素。
 3. 严格遵守本平台的字数/长度上限，宁短勿长，超出一律精简。
-4. 只表现一个主体明确的画面，不要罗列多个互不相关的元素。`;
+4. 只表现一个主体明确的画面，不要罗列多个互不相关的元素。
+5. 【角色映射标注】如果提示词中包含角色，必须在提示词正文之后另起一行，以 [角色映射] 开头，用中文列出每个角色对应的中文名和英文描述片段，格式如：[角色映射] 林悦=young woman with long black hair, red dress；陈朗=tall man, short buzz cut, leather jacket。这帮助用户识别哪个角色对应哪个资产。
+6. 【对白语言绝对保留】即使平台要求“使用英文描述”，也仅限于画面/动作/环境描述用英文。人物对白/台词必须保持原始语言（中文剧本的对白就是中文，绝不能翻译成英文）。例如：她说：“我受够了。” → 正确：she says: "我受够了。" / 错误：she says: "I've had enough."`;
 
 const UNIVERSAL_RULES_VIDEO = `
-5. 视频模型一次生成一个短片段（4-15秒）。从输入中提炼核心动态过程，用动作的起止与过渡来表达（开始→过程→结束）。如果输入包含多个阶段事件，选择最具视觉冲击力的那一个作为主体动态；但如果目标平台支持多镜头（如 Seedance 2.0），可用 "cut to" 串联2-3个短镜头。
-6. 描述动作的物理后果而非抽象意图（"裙摆随旋转展开" 而非 "她很愤怒"）。
-7. 如果输入包含对白/台词，将其转化为目标平台支持的格式（如 Seedance 用双引号包裹 spoken line，其他平台可保留为画外音描述）。`;
+7. 视频模型一次生成一个短片段（4-15秒）。从输入中提炼核心动态过程，用动作的起止与过渡来表达（开始→过程→结束）。如果输入包含多个阶段事件，选择最具视觉冲击力的那一个作为主体动态；但如果目标平台支持多镜头（如 Seedance 2.0），可用 "cut to" 串联2-3个短镜头。
+8. 描述动作的物理后果而非抽象意图（“裙摆随旋转展开” 而非 “她很愤怒”）。
+9. 如果输入包含对白/台词，必须保留原始语言（中文对白必须保持中文，绝对禁止翻译成英文），再转化为目标平台支持的格式（如 Seedance 用双引号包裹，其他平台可保留为画外音描述）。角色说什么语言，提示词中就必须写什么语言。`;
 
 function getUniversalRules(category: "image" | "video"): string {
     return category === "video" ? UNIVERSAL_RULES_COMMON + UNIVERSAL_RULES_VIDEO : UNIVERSAL_RULES_COMMON;
@@ -582,8 +586,19 @@ export async function aiTransferStyle(config: AiConfig, prompt: string, sourcePl
 function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerateResult {
     let text = raw.trim();
     let translation: string | undefined;
+    let characterMapping: string | undefined;
 
-    // 1. 先分离中文对照块（[中文对照] 之后的内容为通俗中文翻译）
+    // 1. 先分离角色映射块（[角色映射] 之后的内容为角色对应关系）
+    const mappingMatch = text.match(/\[角色映射\][：:]?\s*/);
+    if (mappingMatch && mappingMatch.index !== undefined) {
+        // 角色映射可能只有一行，取到行尾或下一个块标记
+        const afterMapping = text.slice(mappingMatch.index + mappingMatch[0].length);
+        const mappingEnd = afterMapping.search(/\n\[|$/);
+        characterMapping = afterMapping.slice(0, mappingEnd === -1 ? undefined : mappingEnd).trim() || undefined;
+        text = text.slice(0, mappingMatch.index).trim() + (mappingEnd > 0 ? afterMapping.slice(mappingEnd).trim() : "");
+    }
+
+    // 2. 分离中文对照块（[中文对照] 之后的内容为通俗中文翻译）
     const contrastMatch = text.match(/\[中文对照\][：:]?\s*/);
     if (contrastMatch && contrastMatch.index !== undefined) {
         translation = text.slice(contrastMatch.index + contrastMatch[0].length).trim() || undefined;
@@ -592,7 +607,7 @@ function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerat
 
     const platformMeta = PLATFORM_LIST.find((p) => p.id === platform);
 
-    // 2. 再在提示词正文内分离负面提示词
+    // 3. 再在提示词正文内分离负面提示词
     if (platformMeta?.supportsNegative) {
         const negativePatterns = [/Negative:\s*/i, /负面提示词[：:]\s*/, /Negative Prompt:\s*/i];
         for (const pattern of negativePatterns) {
@@ -600,12 +615,12 @@ function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerat
             if (match && match.index !== undefined) {
                 const prompt = text.slice(0, match.index).trim();
                 const negativePrompt = text.slice(match.index + match[0].length).trim();
-                return { prompt, negativePrompt: negativePrompt || undefined, translation };
+                return { prompt, negativePrompt: negativePrompt || undefined, translation, characterMapping };
             }
         }
     }
 
-    return { prompt: text, translation };
+    return { prompt: text, translation, characterMapping };
 }
 
 function parseOptimizeResult(raw: string, platform: PromptPlatform): PromptGenerateResult & { note?: string } {

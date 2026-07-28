@@ -67,6 +67,37 @@ function composeAssetInput(type: FlatAsset["type"], raw: Record<string, unknown>
     return `产品「${name}」：${raw.appearance || ""}${raw.packaging ? `，包装：${raw.packaging}` : ""}。${tpl.intent}。`;
 }
 
+/** 构建资产上下文摘要（注入提示词生成输入，确保生成结果与资产一致） */
+function buildAssetContextForPrompt(assets: StoryboardProject["assets"]): string {
+    if (!assets) return "";
+    const parts: string[] = [];
+    if (assets.characters?.length) {
+        parts.push("【角色资产（生成提示词时必须使用以下外观描述，禁止自行发明角色外貌）】");
+        assets.characters.forEach((c) => {
+            parts.push(`- ${c.name}：${c.appearance}${c.costume ? `，服装：${c.costume}` : ""}${c.keywords ? ` [keywords: ${c.keywords}]` : ""}`);
+        });
+    }
+    if (assets.locations?.length) {
+        parts.push("【场景资产】");
+        assets.locations.forEach((l) => {
+            parts.push(`- ${l.name}：${l.description}${l.lighting ? `，光线：${l.lighting}` : ""}`);
+        });
+    }
+    if (assets.props?.length) {
+        parts.push("【道具资产】");
+        assets.props.forEach((p) => {
+            parts.push(`- ${p.name}：${p.description}`);
+        });
+    }
+    if (assets.products?.length) {
+        parts.push("【产品资产】");
+        assets.products.forEach((p) => {
+            parts.push(`- ${p.name}：${p.appearance}${p.packaging ? `，包装：${p.packaging}` : ""}`);
+        });
+    }
+    return parts.join("\n");
+}
+
 /** 扫描镜头文本，匹配其中出现的资产名，组装「镜头 · 角色：xx · 道具：xx」标注（确定性、不依赖 AI） */
 function describeShotAssets(text: string, assets: StoryboardProject["assets"]): string {
     const groups: string[] = [];
@@ -273,13 +304,22 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
         const imagePlatforms = selectedPlatforms.filter((id) => PLATFORM_LIST.find((p) => p.id === id)?.category === "image");
         const videoPlatforms = selectedPlatforms.filter((id) => PLATFORM_LIST.find((p) => p.id === id)?.category === "video");
 
-        // 画面描述输入
-        const visualShots = visualGroups.flatMap((g) => g.shots).filter((sh) => checkedVisualShots.has(sh.id));
-        const visualInputs = visualShots.map((sh) => editedDescriptions.get(sh.id) ?? sh.visualDescription);
+        // 构建资产上下文（注入每个镜头输入，确保生成结果与资产一致）
+        const assetContext = buildAssetContextForPrompt(project.assets);
 
-        // 全局分镜表输入
+        // 画面描述输入（注入资产上下文）
+        const visualShots = visualGroups.flatMap((g) => g.shots).filter((sh) => checkedVisualShots.has(sh.id));
+        const visualInputs = visualShots.map((sh) => {
+            const desc = editedDescriptions.get(sh.id) ?? sh.visualDescription;
+            return assetContext ? `${assetContext}\n\n【当前镜头画面描述】\n${desc}` : desc;
+        });
+
+        // 全局分镜表输入（注入资产上下文）
         const storyboardShots = storyboardGroups.flatMap((g) => g.shots).filter((sh) => checkedStoryboardShots.has(sh.id));
-        const storyboardInputs = storyboardShots.map((sh) => composeShotInput(sh));
+        const storyboardInputs = storyboardShots.map((sh) => {
+            const shotInput = composeShotInput(sh);
+            return assetContext ? `${assetContext}\n\n【当前镜头分镜数据】\n${shotInput}` : shotInput;
+        });
 
         // 资产输入
         const selectedAssets = assetItems.filter((it) => checkedAssets.has(it.id));
@@ -330,7 +370,7 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
                             category = asset.type;
                             assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
                         }
-                        addEntry({ input: imageInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
+                        addEntry({ input: imageInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
                     });
                     done += results.length;
                     setProgress({ done, total: totalTasks });
@@ -358,7 +398,7 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
                             category = asset.type;
                             assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
                         }
-                        addEntry({ input: videoInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
+                        addEntry({ input: videoInputs[i], platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
                     });
                     done += results.length;
                     setProgress({ done, total: totalTasks });

@@ -15,7 +15,7 @@ const STATUS_LABEL: Record<StoryboardStatus, { text: string; color: string }> = 
 
 export function ProjectSidebar() {
     const { message } = App.useApp();
-    const { projects, current, loading, openProject, deleteProject, setStep } = useStoryboardStore();
+    const { projects, current, loading, openProject, deleteProject } = useStoryboardStore();
 
     return (
         <aside className="flex w-60 shrink-0 flex-col border-r border-stone-200 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/50">
@@ -26,8 +26,7 @@ export function ProjectSidebar() {
                     size="small"
                     icon={<Plus className="size-4" />}
                     onClick={() => {
-                        useStoryboardStore.setState({ current: null });
-                        setStep(1);
+                        useStoryboardStore.setState((s) => ({ current: null, step: 1 as const, formResetKey: s.formResetKey + 1 }));
                     }}
                     title="新建项目"
                 />
@@ -100,7 +99,7 @@ export function ProjectSidebar() {
 
             {projects.length > 0 && (
                 <div className="border-t border-stone-200 px-4 py-2 text-center dark:border-stone-800">
-                    <Button type="link" size="small" icon={<FolderOpen className="size-3.5" />} onClick={() => { useStoryboardStore.setState({ current: null }); setStep(1); }}>
+                    <Button type="link" size="small" icon={<FolderOpen className="size-3.5" />} onClick={() => { useStoryboardStore.setState((s) => ({ current: null, step: 1 as const, formResetKey: s.formResetKey + 1 })); }}>
                         新建项目
                     </Button>
                 </div>

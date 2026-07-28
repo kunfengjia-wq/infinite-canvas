@@ -143,8 +143,15 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
                                         <Input size="small" value={c.costume || ""} onChange={(e) => updateCharacter(c.id, { costume: e.target.value || undefined })} placeholder="服装" addonBefore="服装" />
                                         <Input.TextArea size="small" rows={2} value={c.appearance} onChange={(e) => updateCharacter(c.id, { appearance: e.target.value })} placeholder="外貌描述（发色、体型、特征...）" className="sm:col-span-2" />
                                         <Input size="small" value={c.personality || ""} onChange={(e) => updateCharacter(c.id, { personality: e.target.value || undefined })} placeholder="性格" addonBefore="性格" />
-                                        <Input size="small" value={c.keywords} onChange={(e) => updateCharacter(c.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" />
-                                        {c.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{c.keywordsZh}</p>}
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">中文关键词</label>
+                                            <Input.TextArea size="small" rows={2} value={c.keywordsZh || ""} onChange={(e) => updateCharacter(c.id, { keywordsZh: e.target.value || undefined })} placeholder="中文关键词（逗号分隔，方便理解）" />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">英文关键词（用于 AI 生图）</label>
+                                            <Input.TextArea size="small" rows={2} value={c.keywords} onChange={(e) => updateCharacter(c.id, { keywords: e.target.value })} placeholder="English keywords for AI image generation" />
+                                            <p className="mt-0.5 text-[10px] text-stone-400 m-0">↑ 可参考中文翻译修改</p>
+                                        </div>
                                     </div>
                                 )}
                             />
@@ -169,8 +176,14 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
                                             <Input size="small" value={l.lighting || ""} onChange={(e) => updateLocation(l.id, { lighting: e.target.value || undefined })} placeholder="光线" addonBefore="光线" />
                                         </div>
                                         <Input.TextArea size="small" rows={2} value={l.description} onChange={(e) => updateLocation(l.id, { description: e.target.value })} placeholder="环境描述" className="sm:col-span-2" />
-                                        <Input size="small" value={l.keywords} onChange={(e) => updateLocation(l.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
-                                        {l.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{l.keywordsZh}</p>}
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">中文关键词</label>
+                                            <Input.TextArea size="small" rows={2} value={l.keywordsZh || ""} onChange={(e) => updateLocation(l.id, { keywordsZh: e.target.value || undefined })} placeholder="中文关键词（逗号分隔）" />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">英文关键词（用于 AI 生图）</label>
+                                            <Input.TextArea size="small" rows={2} value={l.keywords} onChange={(e) => updateLocation(l.id, { keywords: e.target.value })} placeholder="English keywords for AI image generation" />
+                                        </div>
                                     </div>
                                 )}
                             />
@@ -192,8 +205,14 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
                                         <Input size="small" value={p.name} onChange={(e) => updateProp(p.id, { name: e.target.value })} placeholder="道具名" addonBefore="名称" />
                                         <Input size="small" value={p.significance || ""} onChange={(e) => updateProp(p.id, { significance: e.target.value || undefined })} placeholder="剧情意义" addonBefore="意义" />
                                         <Input.TextArea size="small" rows={2} value={p.description} onChange={(e) => updateProp(p.id, { description: e.target.value })} placeholder="外观描述" className="sm:col-span-2" />
-                                        <Input size="small" value={p.keywords} onChange={(e) => updateProp(p.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
-                                        {p.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{p.keywordsZh}</p>}
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">中文关键词</label>
+                                            <Input.TextArea size="small" rows={2} value={p.keywordsZh || ""} onChange={(e) => updateProp(p.id, { keywordsZh: e.target.value || undefined })} placeholder="中文关键词（逗号分隔）" />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">英文关键词（用于 AI 生图）</label>
+                                            <Input.TextArea size="small" rows={2} value={p.keywords} onChange={(e) => updateProp(p.id, { keywords: e.target.value })} placeholder="English keywords for AI image generation" />
+                                        </div>
                                     </div>
                                 )}
                             />
@@ -217,8 +236,14 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
                                         <Input.TextArea size="small" rows={2} value={p.appearance} onChange={(e) => updateProduct(p.id, { appearance: e.target.value })} placeholder="产品外观描述" className="sm:col-span-2" />
                                         <Input size="small" value={p.packaging || ""} onChange={(e) => updateProduct(p.id, { packaging: e.target.value || undefined })} placeholder="包装描述" addonBefore="包装" />
                                         <Input size="small" value={p.significance} onChange={(e) => updateProduct(p.id, { significance: e.target.value })} placeholder="品牌意义" addonBefore="意义" />
-                                        <Input size="small" value={p.keywords} onChange={(e) => updateProduct(p.id, { keywords: e.target.value })} placeholder="AI 生图关键词（英文）" addonBefore="关键词" className="sm:col-span-2" />
-                                        {p.keywordsZh && <p className="text-xs text-stone-400 sm:col-span-2 m-0 leading-relaxed">译：{p.keywordsZh}</p>}
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">中文关键词</label>
+                                            <Input.TextArea size="small" rows={2} value={p.keywordsZh || ""} onChange={(e) => updateProduct(p.id, { keywordsZh: e.target.value || undefined })} placeholder="中文关键词（逗号分隔）" />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="mb-0.5 block text-[10px] font-medium text-stone-500">英文关键词（用于 AI 生图）</label>
+                                            <Input.TextArea size="small" rows={2} value={p.keywords} onChange={(e) => updateProduct(p.id, { keywords: e.target.value })} placeholder="English keywords for AI image generation" />
+                                        </div>
                                     </div>
                                 )}
                             />
