@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
+import { pullConfigFromCloud, debouncedPushConfig } from "@/services/db/config-cloud-sync";
 
 export type ApiCallFormat = "openai" | "gemini";
 export type ModelCapability = "image" | "video" | "text" | "audio";
@@ -238,6 +239,32 @@ export const useConfigStore = create<ConfigStore>()(
         },
     ),
 );
+
+// ─── 配置云同步：启动时拉取 + 变更时推送 ─────────────────────
+
+/** 启动时：本地无有效 channels 则从云端拉取配置（跨浏览器场景） */
+void (async () => {
+    try {
+        const localConfig = useConfigStore.getState().config;
+        // 本地已有用户配置的 channels（非默认百炼）则不拉取
+        if (localConfig.channels.length > 0 && localConfig.channels[0]?.id !== "default") return;
+        if (localConfig.apiKey) return; // 本地已有 API key
+        const cloud = await pullConfigFromCloud();
+        if (!cloud?.config) return;
+        const cloudConfig = cloud.config as Partial<AiConfig>;
+        if (Array.isArray(cloudConfig.channels) && cloudConfig.channels.length > 0) {
+            useConfigStore.setState((state) => ({
+                config: { ...state.config, ...cloudConfig, channelMode: "local" },
+                webdav: cloud.webdav ? { ...state.webdav, ...(cloud.webdav as object) } : state.webdav,
+            }));
+        }
+    } catch { /* 静默失败 */ }
+})();
+
+/** 变更时：防抖 2 秒推送到云端 */
+useConfigStore.subscribe((state) => {
+    debouncedPushConfig(state.config, state.webdav);
+});
 
 export function useEffectiveConfig() {
     const config = useConfigStore((state) => state.config);

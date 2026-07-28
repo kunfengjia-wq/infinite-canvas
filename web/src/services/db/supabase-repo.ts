@@ -44,7 +44,10 @@ export const supabasePromptProjectRepo = createSupabaseRepo<any>(TABLE_PROMPT);
 export const supabaseScriptProjectRepo = createSupabaseRepo<any>(TABLE_SCRIPT);
 
 /**
- * 混合同步仓库：本地优先 + 后台远程同步
+ * 混合同步仓库：本地优先 + 远程合并
+ * - list：合并本地+远程，同一项目按 updatedAt 取最新
+ * - save：先写本地，后台同步远程
+ * - get：本地优先，本地没有则拉远程
  */
 export function createSyncRepo<T extends { id: string; updatedAt: string }>(
     local: Repository<T>,
@@ -53,14 +56,27 @@ export function createSyncRepo<T extends { id: string; updatedAt: string }>(
     return {
         async list() {
             const localItems = await local.list();
-            if (localItems.length > 0) return localItems;
-            // 本地无数据时尝试拉取远程
             if (!isRemoteSyncEnabled()) return localItems;
+
             try {
                 const remoteItems = await remote.list();
-                // 同步到本地
-                await Promise.all(remoteItems.map((item) => local.save(item)));
-                return remoteItems;
+                if (remoteItems.length === 0) return localItems;
+
+                // 合并：以 id 为 key，按 updatedAt 取最新版本
+                const merged = new Map<string, T>();
+                for (const item of localItems) merged.set(item.id, item);
+                for (const remoteItem of remoteItems) {
+                    const localItem = merged.get(remoteItem.id);
+                    if (!localItem || new Date(remoteItem.updatedAt) > new Date(localItem.updatedAt)) {
+                        merged.set(remoteItem.id, remoteItem);
+                        // 同步到本地
+                        local.save(remoteItem).catch(() => {});
+                    }
+                }
+
+                return Array.from(merged.values()).sort(
+                    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+                );
             } catch {
                 return localItems;
             }
