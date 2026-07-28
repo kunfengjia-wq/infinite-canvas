@@ -5,6 +5,9 @@
 import { requestImageQuestion, type AiTextMessage } from "@/services/api/image";
 import type { AiConfig } from "@/stores/use-config-store";
 import { preferenceRepo } from "@/services/db";
+import { getSkillPrompt } from "@/services/db/skills-repo";
+import { recordGeneration } from "@/services/db/history-repo";
+import { withRetry, parseJsonArray, parseJsonObject } from "@/services/ai-utils";
 import type {
     InspirationCard,
     InspirationCardType,
@@ -16,43 +19,6 @@ import type {
 import { CARD_TYPE_META } from "@/types/script-creation";
 
 // ─── 工具函数 ────────────────────────────────────────────────────
-
-function parseJsonArray<T>(raw: string): T[] {
-    const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const start = cleaned.indexOf("[");
-    const end = cleaned.lastIndexOf("]");
-    if (start === -1 || end === -1) throw new Error("AI 返回格式异常，未找到 JSON 数组");
-    try {
-        return JSON.parse(cleaned.slice(start, end + 1)) as T[];
-    } catch {
-        throw new Error("AI 返回的 JSON 解析失败，请重试");
-    }
-}
-
-function parseJsonObject<T>(raw: string): T {
-    const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("AI 返回格式异常，未找到 JSON 对象");
-    try {
-        return JSON.parse(cleaned.slice(start, end + 1)) as T;
-    } catch {
-        throw new Error("AI 返回的 JSON 解析失败，请重试");
-    }
-}
-
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
-    let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-            if (!lastError.message.includes("JSON") && !lastError.message.includes("格式异常")) throw lastError;
-        }
-    }
-    throw lastError ?? new Error("重试耗尽");
-}
 
 function genId(): string {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -106,12 +72,14 @@ export async function aiGenerateInspirationCards(
 ): Promise<InspirationCard[]> {
     return withRetry(async () => {
         const prefContext = await buildPreferenceContext();
+        const systemPrompt = (await getSkillPrompt("sc_inspiration")) ?? INSPIRATION_SYSTEM;
         const messages: AiTextMessage[] = [
-            { role: "system", content: INSPIRATION_SYSTEM + prefContext },
+            { role: "system", content: systemPrompt + prefContext },
             { role: "user", content: `灵感种子：「${seed}」\n${batch > 1 ? `（第 ${batch} 批，请生成与之前不同方向的新卡片）` : ""}\n请生成灵感卡片：` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         const items = parseJsonArray<{ type: string; title: string; description: string }>(raw);
+        recordGeneration({ skillId: "sc_inspiration", inputText: seed.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
             id: genId(),
             type: item.type as InspirationCardType,
@@ -179,15 +147,17 @@ export async function aiGenerateSettings(
     onDelta?: (text: string) => void,
 ): Promise<SettingProposal[]> {
     return withRetry(async () => {
+        const systemPrompt = (await getSkillPrompt("sc_setting")) ?? SETTING_SYSTEM;
         const cardsContext = selectedCards
             .map((c) => `[${CARD_TYPE_META[c.type].label}] ${c.title}：${c.description}`)
             .join("\n");
         const messages: AiTextMessage[] = [
-            { role: "system", content: SETTING_SYSTEM },
+            { role: "system", content: systemPrompt },
             { role: "user", content: `灵感种子：「${seed}」\n\n用户选中的灵感卡片：\n${cardsContext}\n\n请生成 2-3 套设定方案：` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         const items = parseJsonArray<any>(raw);
+        recordGeneration({ skillId: "sc_setting", inputText: cardsContext.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
             id: genId(),
             title: item.title,
@@ -234,13 +204,15 @@ export async function aiGenerateStructures(
     onDelta?: (text: string) => void,
 ): Promise<StructureProposal[]> {
     return withRetry(async () => {
+        const systemPrompt = (await getSkillPrompt("sc_structure")) ?? STRUCTURE_SYSTEM;
         const settingContext = buildSettingContext(setting);
         const messages: AiTextMessage[] = [
-            { role: "system", content: STRUCTURE_SYSTEM },
+            { role: "system", content: systemPrompt },
             { role: "user", content: `已确定的故事设定：\n${settingContext}\n\n请生成 2-3 种故事结构方案：` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         const items = parseJsonArray<any>(raw);
+        recordGeneration({ skillId: "sc_structure", inputText: settingContext.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
             id: genId(),
             title: item.title,
@@ -277,6 +249,7 @@ export async function aiGenerateSegment(
     contextSummary: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
+    const systemPrompt = (await getSkillPrompt("sc_segment_writer")) ?? SEGMENT_WRITER_SYSTEM;
     const settingContext = buildSettingContext(setting);
     const structureOverview = structure.beats.map((b) => `${b.index + 1}. ${b.label}：${b.summary}`).join("\n");
     const userContent = [
@@ -289,10 +262,11 @@ export async function aiGenerateSegment(
     ].filter(Boolean).join("\n");
 
     const messages: AiTextMessage[] = [
-        { role: "system", content: SEGMENT_WRITER_SYSTEM },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+    recordGeneration({ skillId: "sc_segment_writer", inputText: beat.summary.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
     return raw.trim();
 }
 
@@ -334,12 +308,14 @@ export async function aiConsistencyCheck(
     fullScript: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
+    const systemPrompt = (await getSkillPrompt("sc_consistency_check")) ?? `你是剧本审校专家。检查剧本的一致性，输出结构化报告：\n1. 角色一致性（名字/性格/外貌是否前后矛盾）\n2. 设定一致性（世界观规则是否被违反）\n3. 情节逻辑（是否有不合理跳跃）\n4. 伏笔回收（是否有未回收的伏笔）\n5. 节奏评估（整体节奏是否合理）\n\n格式：每项给出 ✅通过 或 ⚠️问题+具体位置+修改建议。最后给出总评。`;
     const settingContext = buildSettingContext(setting);
     const messages: AiTextMessage[] = [
-        { role: "system", content: `你是剧本审校专家。检查剧本的一致性，输出结构化报告：\n1. 角色一致性（名字/性格/外貌是否前后矛盾）\n2. 设定一致性（世界观规则是否被违反）\n3. 情节逻辑（是否有不合理跳跃）\n4. 伏笔回收（是否有未回收的伏笔）\n5. 节奏评估（整体节奏是否合理）\n\n格式：每项给出 ✅通过 或 ⚠️问题+具体位置+修改建议。最后给出总评。` },
+        { role: "system", content: systemPrompt },
         { role: "user", content: `【设定】\n${settingContext}\n\n【完整剧本】\n${fullScript.slice(0, 12000)}\n\n请进行一致性检查：` },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+    recordGeneration({ skillId: "sc_consistency_check", inputText: fullScript.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
     return raw.trim();
 }
 

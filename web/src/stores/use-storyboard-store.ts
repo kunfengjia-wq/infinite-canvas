@@ -12,6 +12,8 @@ type StoryboardStore = {
     current: StoryboardProject | null;
     /** 当前步骤 */
     step: StoryboardStep;
+    /** 已到达的最远步骤（允许回退后再前进） */
+    maxStep: StoryboardStep;
     /** AI 处理中 */
     processing: boolean;
     /** 加载状态 */
@@ -71,6 +73,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
     projects: [],
     current: null,
     step: 1,
+    maxStep: 1,
     processing: false,
     loading: false,
     formResetKey: 0,
@@ -85,7 +88,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
         const project = createEmptyProject(title, script);
         await getStoryboardRepo().save(project);
         useUndoStore.getState().clear();
-        set((state) => ({ projects: [project, ...state.projects], current: project, step: 1 }));
+        set((state) => ({ projects: [project, ...state.projects], current: project, step: 1, maxStep: 1 }));
         return project.id;
     },
 
@@ -93,8 +96,9 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
         const project = await getStoryboardRepo().get(id);
         if (!project) return;
         const stepMap: Record<StoryboardStatus, StoryboardStep> = { draft: 1, assets_confirmed: 3, scenes_confirmed: 4, shots_confirmed: 5, descriptions_confirmed: 5 };
+        const targetStep = stepMap[project.status] ?? 1;
         useUndoStore.getState().clear();
-        set({ current: project, step: stepMap[project.status] ?? 1 });
+        set({ current: project, step: targetStep, maxStep: targetStep });
     },
 
     deleteProject: async (id) => {
@@ -116,7 +120,7 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
         }));
     },
 
-    setStep: (step) => set({ step }),
+    setStep: (step) => set((state) => ({ step, maxStep: Math.max(state.maxStep, step) as StoryboardStep })),
     setProcessing: (v) => set({ processing: v }),
 
     // ─── 资产 ───

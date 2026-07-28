@@ -23,7 +23,7 @@ function getPanelMax(): number {
 
 export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiConfig; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
-    const { current, step, setStep, formResetKey } = useStoryboardStore();
+    const { current, step, maxStep, setStep, formResetKey } = useStoryboardStore();
     const [tableOpen, setTableOpen] = useState(true);
     const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
     const [maximized, setMaximized] = useState(false);
@@ -32,7 +32,8 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
 
     const handleStepClick = (target: StoryboardStep) => {
         if (!current) return;
-        if (target <= step || current.status !== "draft") setStep(target);
+        // 允许导航到已到达的最远步骤以内的任意步骤
+        if (target <= maxStep) setStep(target);
     };
 
     // ─── 拖拽调整面板宽度 ───
@@ -97,7 +98,7 @@ export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiCo
         <div className="flex h-full flex-col overflow-hidden">
             {/* 紧凑步骤指示器 */}
             <div className="shrink-0 border-b border-stone-100 dark:border-stone-800">
-                <StepIndicator current={step} onStepClick={handleStepClick} />
+                <StepIndicator current={step} maxStep={maxStep} onStepClick={handleStepClick} />
             </div>
 
             {/* 主内容区：编辑面板 + 右侧分镜表 */}

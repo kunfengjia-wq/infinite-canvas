@@ -18,7 +18,7 @@ export default function ScriptCreationPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const { current, loadProjects } = useScriptCreationStore();
+    const { current, loadProjects, setPhase } = useScriptCreationStore();
     const [selectedModel, setSelectedModel] = useState("");
     const aiConfig = useMemo(() => (selectedModel ? { ...effectiveConfig, model: selectedModel } : effectiveConfig), [effectiveConfig, selectedModel]);
 
@@ -48,7 +48,7 @@ export default function ScriptCreationPage() {
                 {/* 步骤指示器 */}
                 {current && (
                     <div className="border-b border-stone-100 px-6 py-3 dark:border-stone-800/50">
-                        <StepIndicator phases={CREATION_PHASES} current={phase} />
+                        <StepIndicator phases={CREATION_PHASES} current={phase} maxReached={current.maxPhase ?? phase} onNavigate={(p) => setPhase(p as typeof phase)} />
                     </div>
                 )}
 

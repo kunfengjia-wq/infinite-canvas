@@ -141,7 +141,8 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
                 4: "writing",
                 5: "completed",
             };
-            return { current: { ...state.current, phase, status: statusMap[phase] } };
+            const maxPhase = Math.max(state.current.maxPhase ?? 1, phase) as CreationPhase;
+            return { current: { ...state.current, phase, maxPhase, status: statusMap[phase] } };
         });
         void get().saveCurrent();
     },

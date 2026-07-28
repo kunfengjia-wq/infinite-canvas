@@ -183,6 +183,8 @@ export type ScriptProject = {
     /** 灵感种子（用户输入的一句话） */
     seed: string;
     phase: CreationPhase;
+    /** 历史最远到达阶段（只增不减，用于步骤回退后仍可前进） */
+    maxPhase: CreationPhase;
     status: ScriptProjectStatus;
 
     // Phase 1 数据
@@ -225,6 +227,7 @@ export function createEmptyScriptProject(title: string, seed: string): ScriptPro
         title,
         seed,
         phase: 1,
+        maxPhase: 1,
         status: "exploring",
         cards: [],
         cardBatch: 0,

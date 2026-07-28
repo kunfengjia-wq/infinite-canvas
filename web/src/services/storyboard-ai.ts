@@ -9,6 +9,7 @@ import type { AiSceneResult, AiShotResult, StoryAssets } from "@/types/storyboar
 import { getSkillPrompt } from "@/services/db/skills-repo";
 import { recordGeneration } from "@/services/db/history-repo";
 import { supabase } from "@/services/db/supabase-client";
+import { withRetry, parseJsonArray, parseJsonObject } from "@/services/ai-utils";
 
 // ─── Few-shot 检索（Supabase dataset_items）─────────────────────
 
@@ -267,6 +268,7 @@ async function splitScenesSingle(config: AiConfig, script: string, onDelta?: (te
             { role: "user", content: `请将以下剧本拆分为场景：\n\n${script}` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        recordGeneration({ skillId: "sb_scene_split", inputText: script.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
         return parseJsonArray<AiSceneResult>(raw);
     });
 }
@@ -318,6 +320,7 @@ export async function aiGenerateShots(config: AiConfig, sceneTitle: string, scen
             { role: "user", content: userContent },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        recordGeneration({ skillId: "sb_shot_generation", inputText: sceneTitle.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
         return parseJsonArray<AiShotResult>(raw);
     });
 }
@@ -350,6 +353,7 @@ export async function aiGenerateVisualDescription(config: AiConfig, shot: { shot
         { role: "user", content: userContent },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+    recordGeneration({ skillId: "sb_visual_description", inputText: shot.action.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
     return raw.trim();
 }
 
@@ -397,6 +401,7 @@ export async function aiCharacterConsistency(config: AiConfig, characterName: st
         { role: "user", content: `角色名：${characterName}\n基础描述：${baseDescription}\n\n请生成标准化外貌锚定描述：` },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+    recordGeneration({ skillId: "sb_character_consistency", inputText: baseDescription.slice(0, 200), outputText: raw.slice(0, 300), model: config.model });
     return raw.trim();
 }
 
@@ -436,26 +441,12 @@ export async function aiSuggestTransition(config: AiConfig, sceneA: { title: str
             { role: "user", content: userContent },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        recordGeneration({ skillId: "sb_transition_advisor", inputText: `${sceneA.title} → ${sceneB.title}`, outputText: raw.slice(0, 300), model: config.model });
         return parseJsonObject<TransitionSuggestion>(raw);
     });
 }
 
 // ─── 工具函数 ────────────────────────────────────────────────────
-
-/** 带重试的 AI 调用包装（JSON 解析失败时自动重试） */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
-    let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-            // 仅在 JSON 解析类错误时重试，其他错误直接抛出
-            if (!lastError.message.includes("JSON") && !lastError.message.includes("格式异常")) throw lastError;
-        }
-    }
-    throw lastError ?? new Error("重试耗尽");
-}
 
 /** 将 StoryAssets 构建为传递给 AI 的上下文字符串 */
 export function buildAssetsContext(assets: StoryAssets): string {
@@ -496,31 +487,4 @@ export function buildProjectMetaContext(project: { projectType?: string; targetD
     if (project.visualStyle) parts.push(`视觉风格：${project.visualStyle}`);
     if (project.targetPlatform) parts.push(`目标平台：${project.targetPlatform}`);
     return parts.join("，");
-}
-
-function parseJsonArray<T>(raw: string): T[] {
-    // 尝试从 AI 输出中提取 JSON 数组
-    const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const start = cleaned.indexOf("[");
-    const end = cleaned.lastIndexOf("]");
-    if (start === -1 || end === -1) throw new Error("AI 返回格式异常，未找到 JSON 数组");
-    const jsonStr = cleaned.slice(start, end + 1);
-    try {
-        return JSON.parse(jsonStr) as T[];
-    } catch {
-        throw new Error("AI 返回的 JSON 解析失败，请重试");
-    }
-}
-
-function parseJsonObject<T>(raw: string): T {
-    const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("AI 返回格式异常，未找到 JSON 对象");
-    const jsonStr = cleaned.slice(start, end + 1);
-    try {
-        return JSON.parse(jsonStr) as T;
-    } catch {
-        throw new Error("AI 返回的 JSON 解析失败，请重试");
-    }
 }
