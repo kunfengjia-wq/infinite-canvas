@@ -353,27 +353,32 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
 
         try {
             let done = 0;
+            const failures: string[] = [];
 
-            /** 逐条生成并即时输出 */
+            /** 逐条生成并即时输出（单条失败不中断整体流程） */
             const generateOne = async (input: string, platform: string, index: number, inputs: string[]) => {
-                const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined });
-                let category: PromptCategory;
-                let assetRef: string;
-                if (index < visualInputs.length) {
-                    category = "general";
-                    const shot = visualShots[index];
-                    assetRef = describeShotAssets(shot?.visualDescription ?? "", project.assets);
-                } else if (index < visualInputs.length + storyboardInputs.length) {
-                    category = "general";
-                    const shot = storyboardShots[index - visualInputs.length];
-                    const searchText = `${shot?.action ?? ""} ${shot?.dialogue ?? ""}`;
-                    assetRef = describeShotAssets(searchText, project.assets);
-                } else {
-                    const asset = selectedAssets[index - visualInputs.length - storyboardInputs.length];
-                    category = asset.type;
-                    assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
+                try {
+                    const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined });
+                    let category: PromptCategory;
+                    let assetRef: string;
+                    if (index < visualInputs.length) {
+                        category = "general";
+                        const shot = visualShots[index];
+                        assetRef = describeShotAssets(shot?.visualDescription ?? "", project.assets);
+                    } else if (index < visualInputs.length + storyboardInputs.length) {
+                        category = "general";
+                        const shot = storyboardShots[index - visualInputs.length];
+                        const searchText = `${shot?.action ?? ""} ${shot?.dialogue ?? ""}`;
+                        assetRef = describeShotAssets(searchText, project.assets);
+                    } else {
+                        const asset = selectedAssets[index - visualInputs.length - storyboardInputs.length];
+                        category = asset.type;
+                        assetRef = `${ASSET_TYPE_LABEL[asset.type]}：${asset.label}`;
+                    }
+                    addEntry({ input, platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
+                } catch (err) {
+                    failures.push(`第${index + 1}条(${platform}): ${err instanceof Error ? err.message : "未知错误"}`);
                 }
-                addEntry({ input, platform, prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined, category, assetRef });
                 done++;
                 setProgress({ done, total: totalTasks });
             };
@@ -397,7 +402,11 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
             }
 
             await usePromptStudioStore.getState().saveCurrent();
-            message.success(`已生成 ${done} 条提示词`);
+            if (failures.length > 0) {
+                message.warning(`已生成 ${done - failures.length} 条，${failures.length} 条失败：${failures.slice(0, 3).join("；")}${failures.length > 3 ? "…" : ""}`);
+            } else {
+                message.success(`已生成 ${done} 条提示词`);
+            }
         } catch (error) {
             onError(error instanceof Error ? error.message : "批量生成失败");
         } finally {
