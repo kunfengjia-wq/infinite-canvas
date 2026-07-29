@@ -319,7 +319,33 @@ export async function aiConsistencyCheck(
     return raw.trim();
 }
 
-// ─── 辅助 ───────────────────────────────────────────────────────
+// ─── 辅助 ─────────────────────────────────────────────────────
+
+/** 一致性检查后 AI 一键修复 */
+export async function aiFixConsistencyIssues(
+    config: AiConfig,
+    setting: SettingProposal,
+    fullScript: string,
+    report: string,
+    onDelta?: (text: string) => void,
+): Promise<string> {
+    const systemPrompt = (await getSkillPrompt("sc_consistency_fix")) ?? `你是剧本修复专家。用户会给你一份一致性检查报告和原始剧本。
+你的任务是根据报告中标记的问题（⚠️项）直接修复剧本。
+
+规则：
+- 只修复报告指出的问题，不要改动无关内容
+- 保持原文风格、语气、节奏不变
+- 修复后直接输出完整剧本，不要输出任何解释或标记
+- 如果报告全部通过（无⚠️），原样输出剧本`;
+    const settingContext = buildSettingContext(setting);
+    const messages: AiTextMessage[] = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `【设定】\n${settingContext}\n\n【一致性检查报告】\n${report}\n\n【原始剧本】\n${fullScript.slice(0, 12000)}\n\n请修复上述问题，输出完整剧本：` },
+    ];
+    const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+    recordGeneration({ skillId: "sc_consistency_fix", inputText: report.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
+    return raw.trim();
+}
 
 function buildSettingContext(setting: SettingProposal): string {
     const parts: string[] = [];
