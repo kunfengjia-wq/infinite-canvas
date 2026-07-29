@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 import { pullConfigFromCloud, debouncedPushConfig } from "@/services/db/config-cloud-sync";
 
-export type ApiCallFormat = "openai" | "gemini" | "ark";
+export type ApiCallFormat = "openai" | "gemini" | "ark" | "dashscope" | "siliconflow";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 export type ReasoningEffort = "auto" | "low" | "medium" | "high" | "xhigh";
 
@@ -68,6 +68,8 @@ const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 const DASHSCOPE_BASE_URL = import.meta.env.VITE_DASHSCOPE_BASE_URL || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com/compatible-mode";
 const DASHSCOPE_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY || "";
 const ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+const DASHSCOPE_PUBLIC_URL = "https://dashscope.aliyuncs.com/compatible-mode";
+const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn";
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
@@ -398,11 +400,14 @@ function normalizeChannels(config: AiConfig) {
 export function defaultBaseUrlForApiFormat(apiFormat: ApiCallFormat) {
     if (apiFormat === "gemini") return GEMINI_BASE_URL;
     if (apiFormat === "ark") return ARK_BASE_URL;
+    if (apiFormat === "dashscope") return DASHSCOPE_PUBLIC_URL;
+    if (apiFormat === "siliconflow") return SILICONFLOW_BASE_URL;
     return OPENAI_BASE_URL;
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-    return apiFormat === "gemini" || apiFormat === "ark" ? apiFormat : "openai";
+    if (apiFormat === "gemini" || apiFormat === "ark" || apiFormat === "dashscope" || apiFormat === "siliconflow") return apiFormat;
+    return "openai";
 }
 
 function uniqueModelOptions(models: string[]) {

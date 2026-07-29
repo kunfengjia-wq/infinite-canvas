@@ -10,6 +10,8 @@ const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [
     { label: "OpenAI", value: "openai" },
     { label: "Gemini", value: "gemini" },
     { label: "火山方舟", value: "ark" },
+    { label: "阿里云百炼", value: "dashscope" },
+    { label: "硅基流动", value: "siliconflow" },
 ];
 
 const capabilityOptions: Array<{ label: string; value: ModelCapability }> = [

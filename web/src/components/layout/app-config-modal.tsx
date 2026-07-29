@@ -384,6 +384,8 @@ function normalizeImageCount(value: string) {
 function apiFormatLabel(apiFormat: ApiCallFormat) {
     if (apiFormat === "gemini") return "Gemini";
     if (apiFormat === "ark") return "火山方舟";
+    if (apiFormat === "dashscope") return "阿里云百炼";
+    if (apiFormat === "siliconflow") return "硅基流动";
     return "OpenAI";
 }
 
