@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,10 @@ function localPluginsManifest(): Plugin {
 }
 
 export default defineConfig({
+    test: {
+        globals: true,
+        environment: "node",
+    },
     base: process.env.VITE_BASE || "/",
     plugins: [react(), localPluginsManifest()],
     resolve: {
