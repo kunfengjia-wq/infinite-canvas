@@ -9,6 +9,7 @@ import { PLATFORM_LIST, STYLE_PRESETS } from "@/types/prompt-studio";
 import { supabase } from "@/services/db/supabase-client";
 import { getSkillPrompt } from "@/services/db/skills-repo";
 import { recordGeneration } from "@/services/db/history-repo";
+import { TtlCache } from "@/services/ai-utils";
 import { getPositiveExamples, getNegativeExamples } from "@/services/db/feedback-repo";
 
 // ─── Few-shot 示例（从 Supabase 数据集获取）─────────────────────
@@ -41,8 +42,8 @@ function mapPlatformToDataset(platform: PromptPlatform): string {
     return map[platform] || "general";
 }
 
-/** 缓存已获取的示例，避免重复请求 */
-const fewShotCache = new Map<string, string>();
+/** 缓存已获取的示例（30分钟 TTL + sessionStorage 跨刷新保留） */
+const fewShotCache = new TtlCache("fewshot:prompt");
 
 async function getFewShotExamples(platform: PromptPlatform): Promise<string> {
     const datasetPlatform = mapPlatformToDataset(platform);

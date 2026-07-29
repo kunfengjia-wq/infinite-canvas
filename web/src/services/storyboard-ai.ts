@@ -9,11 +9,11 @@ import type { AiSceneResult, AiShotResult, StoryAssets } from "@/types/storyboar
 import { getSkillPrompt } from "@/services/db/skills-repo";
 import { recordGeneration } from "@/services/db/history-repo";
 import { supabase } from "@/services/db/supabase-client";
-import { withRetry, parseJsonArray, parseJsonObject } from "@/services/ai-utils";
+import { withRetry, parseJsonArray, parseJsonObject, TtlCache } from "@/services/ai-utils";
 
 // ─── Few-shot 检索（Supabase dataset_items）─────────────────────
 
-const fewShotCache = new Map<string, string>();
+const fewShotCache = new TtlCache("fewshot:storyboard");
 
 /** 按 tag 从 dataset_items 检索高质量 few-shot 示例，注入 system prompt 尾部 */
 async function getStoryboardFewShot(tag: string, limit = 3): Promise<string> {
