@@ -92,7 +92,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
         setSeedDiverging(true);
         try {
             const existing = bubbles.map((b) => b.text);
-            const results = await aiDivergeFromBubble(config, seed.trim(), existing);
+            const results = await aiDivergeFromBubble(config, seed.trim(), seed.trim(), existing);
             const newBubbles: Bubble[] = results.map((text, i) => ({
                 id: genId(),
                 text: text.length > 6 ? text.slice(0, 6) : text,
@@ -109,12 +109,12 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
         finally { setSeedDiverging(false); }
     }, [config, seed, bubbles]);
 
-    // ─── 从泡泡发散 ───
+    // ─── 从泡泡发散（传入种子上下文保持关联性） ───
     const handleDivergeFromBubble = useCallback(async (bubble: Bubble) => {
         setDiverging(bubble.id);
         try {
             const existing = bubbles.map((b) => b.text);
-            const results = await aiDivergeFromBubble(config, bubble.text, existing);
+            const results = await aiDivergeFromBubble(config, bubble.text, seed.trim() || bubble.text, existing);
             const gen = Math.min(bubble.generation + 1, 2);
             const newBubbles: Bubble[] = results.map((text, i) => {
                 const angle = (i / results.length) * Math.PI * 2 + Math.random() * 0.5;
@@ -135,7 +135,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
             setBubbles((prev) => [...prev, ...newBubbles].slice(-24));
         } catch { /* 静默 */ }
         finally { setDiverging(null); }
-    }, [config, bubbles]);
+    }, [config, seed, bubbles]);
 
     // ─── 拖拽 ───
     const handlePointerDown = (id: string) => (e: React.PointerEvent) => {
@@ -156,12 +156,6 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
         };
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp);
-    };
-
-    // ─── 双击泡泡 = 填入种子 ───
-    const handleBubbleDoubleClick = (e: React.MouseEvent, text: string) => {
-        e.stopPropagation();
-        onFillSeed(text);
     };
 
     // ─── 移除泡泡 ───
@@ -235,11 +229,19 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
                             style={{ left: `${b.x}%`, top: `${b.y}%`, transform: "translate(-50%, -50%)", zIndex: 1, cursor: isDiverging ? "wait" : "pointer" }}
                             onPointerDown={handlePointerDown(b.id)}
                             onClick={() => !isDiverging && handleDivergeFromBubble(b)}
-                            onDoubleClick={(e) => handleBubbleDoubleClick(e, b.text)}
-                            title={`单击：发散关联概念\n双击：填入种子\n拖拽：移动`}
+                            title={`单击：发散关联概念\n拖拽：移动`}
                         >
                             {isDiverging ? <LoaderCircle className="size-4 animate-spin" /> : <span className="px-1 text-center leading-tight">{b.text}</span>}
-                            <button className="absolute -right-1 -top-1 hidden size-4 items-center justify-center rounded-full bg-black/60 text-white/80 group-hover:flex" onClick={removeBubble(b.id)}>
+                            {/* 快捷加入种子 */}
+                            <button
+                                className="absolute -bottom-1 -right-1 hidden size-5 items-center justify-center rounded-full bg-emerald-500 text-white shadow group-hover:flex"
+                                onClick={(e) => { e.stopPropagation(); onFillSeed(b.text); }}
+                                title="加入灵感种子"
+                            >
+                                <span className="text-xs font-bold leading-none">+</span>
+                            </button>
+                            {/* 删除 */}
+                            <button className="absolute -left-1 -top-1 hidden size-4 items-center justify-center rounded-full bg-black/60 text-white/80 group-hover:flex" onClick={removeBubble(b.id)}>
                                 <X className="size-2.5" />
                             </button>
                         </div>
@@ -259,7 +261,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
 
             {/* 底部提示 */}
             <div className="relative z-10 px-4 pb-2 pt-1">
-                <p className="text-center text-[10px] text-white/25">单击泡泡 = 发散 · 双击泡泡 = 填入种子 · 拖拽 = 移动 · 双击空白 = 添加</p>
+                <p className="text-center text-[10px] text-white/25">单击泡泡 = 发散 · hover 点 + = 加入种子 · 拖拽 = 移动 · 双击空白 = 添加</p>
             </div>
         </div>
     );
