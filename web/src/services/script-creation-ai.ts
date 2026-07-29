@@ -337,3 +337,79 @@ function buildSettingContext(setting: SettingProposal): string {
     parts.push(`主题：${setting.conflict.theme}`);
     return parts.join("\n");
 }
+
+// ─── 灵感种子刷新：AI 实时筛选热门创作灵感 ────────────────────
+
+const SEED_REFRESH_FALLBACK = `你是一位剧本创意策展人，精通当下影视、网文、游戏、动漫行业的热门趋势与社会议题。
+你的任务是为创作者提供 6 条「灵感种子」——每条是一句话的故事概念，能直接作为剧本创作的起点。
+
+筛选原则：
+1. 结合当前时事热点、社会议题、科技趋势、流行文化现象
+2. 覆盖多种类型：科幻、悬疑、情感、奇幻、现实主义、喜剧等
+3. 每条种子要有画面感、有冲突张力、能激发联想
+4. 避免老套设定，追求新颖但不猎奇
+5. 每条控制在 15-30 字，简洁有力
+
+严格以 JSON 数组格式输出，不要输出任何其他文字：
+["种子1","种子2","种子3","种子4","种子5","种子6"]`;
+
+/** AI 实时刷新灵感种子示例（支持 skill 远程配置 + 时效性注入） */
+export async function aiRefreshSeedExamples(
+    config: AiConfig,
+    onDelta?: (text: string) => void,
+): Promise<string[]> {
+    return withRetry(async () => {
+        const skillPrompt = (await getSkillPrompt("sc_seed_refresh")) ?? SEED_REFRESH_FALLBACK;
+        const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" });
+        const systemPrompt = `${skillPrompt}\n\n【当前日期】${today}\n请确保灵感种子与此日期前后的时事热点、社会现象、科技进展、流行文化紧密相关，保证时效性。`;
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `今天是${today}，请结合最新时事热点和流行趋势，生成 6 条适合剧本创作的灵感种子：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        const items = parseJsonArray<string>(raw);
+        return items.filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 8);
+    });
+}
+
+// ─── 灵感风暴：从单个泡泡发散关联概念 ───────────────────────
+
+const STORM_DIVERGE_FALLBACK = `你是一位创意发散专家，精通叙事学、社会心理学和流行文化。
+用户给你一个关键词/概念，你需要从它发散出 4-5 个「相关联但不同维度」的新概念。
+
+发散维度（至少覆盖 3 种）：
+- 因果链：这个概念会导致/源于什么？
+- 对立面：它的反面/矛盾是什么？
+- 隐喻延伸：它可以象征/隐喻什么？
+- 跨界融合：与其他领域碰撞会产生什么？
+- 时事关联：当前社会/科技/文化热点中有哪些与之共振？
+- 情感投射：它能触发什么深层情感？
+
+要求：
+- 每个发散词 2-6 字，简洁有力
+- 避免直接同义词，追求「意料之外、情理之中」
+- 结合当下时事和流行趋势，保证时效性
+
+严格以 JSON 数组格式输出，不要输出任何其他文字：
+["发散词1","发散词2","发散词3","发散词4","发散词5"]`;
+
+/** 从单个泡泡发散关联概念（支持 skill 覆盖 + 实时日期注入） */
+export async function aiDivergeFromBubble(
+    config: AiConfig,
+    keyword: string,
+    existingTexts: string[],
+    onDelta?: (text: string) => void,
+): Promise<string[]> {
+    return withRetry(async () => {
+        const skillPrompt = (await getSkillPrompt("sc_storm_diverge")) ?? STORM_DIVERGE_FALLBACK;
+        const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+        const systemPrompt = `${skillPrompt}\n\n【当前日期】${today}\n请结合此日期前后的时事热点、社会议题、科技进展进行发散，保证信息时效性。`;
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `核心概念：「${keyword}」\n画布上已有的概念（避免重复）：${existingTexts.join("、") || "无"}\n\n请发散 4-5 个关联概念：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        const items = parseJsonArray<string>(raw);
+        return items.filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6);
+    });
+}

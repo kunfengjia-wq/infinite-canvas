@@ -30,7 +30,7 @@ export default function ScriptCreationPage() {
 
     return (
         <div className="flex h-full overflow-hidden bg-background text-stone-800 dark:text-stone-100">
-            <ScriptProjectSidebar />
+            <ScriptProjectSidebar config={aiConfig} />
 
             <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 {/* 顶部标题 */}

@@ -1,17 +1,31 @@
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Lightbulb, LoaderCircle, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Input, Modal, Popconfirm } from "antd";
+import { App, Button, Input, Modal, Popconfirm, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import type { AiConfig } from "@/stores/use-config-store";
 import { CREATION_PHASES } from "@/types/script-creation";
+import { aiRefreshSeedExamples } from "@/services/script-creation-ai";
+import { SeedStormCanvas } from "./seed-storm-canvas";
 import { cn } from "@/lib/utils";
 
-export function ScriptProjectSidebar() {
+const DEFAULT_SEED_EXAMPLES = [
+    "一个孤独的宇航员在火星发现古老地下城市",
+    "末日后的东京，少女与AI机器人寻找最后的花园",
+    "民国时期上海滩，一位女侦探破解连环密室杀人案",
+    "深海科考队发现沉没的亚特兰蒂斯遗迹",
+    "平行宇宙交错，同一个人活出截然不同的人生",
+    "赛博朋克世界里的地下音乐革命",
+];
+
+export function ScriptProjectSidebar({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
     const { projects, current, createProject, openProject, deleteProject, forkProject } = useScriptCreationStore();
     const [creating, setCreating] = useState(false);
     const [newTitle, setNewTitle] = useState("");
     const [newSeed, setNewSeed] = useState("");
+    const [seedExamples, setSeedExamples] = useState<string[]>(DEFAULT_SEED_EXAMPLES);
+    const [refreshingSeeds, setRefreshingSeeds] = useState(false);
 
     const handleCreate = async () => {
         if (!newSeed.trim()) {
@@ -31,28 +45,33 @@ export function ScriptProjectSidebar() {
         if (newId) message.success("已派生二创项目");
     };
 
+    const handleCloseCreate = () => {
+        setCreating(false);
+        setNewTitle("");
+        setNewSeed("");
+    };
+
+    /** AI 实时刷新灵感种子示例 */
+    const handleRefreshSeeds = async () => {
+        setRefreshingSeeds(true);
+        try {
+            const fresh = await aiRefreshSeedExamples(config);
+            if (fresh.length > 0) setSeedExamples(fresh);
+            else message.warning("AI 未返回有效结果，请重试");
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : "AI 刷新失败");
+        } finally {
+            setRefreshingSeeds(false);
+        }
+    };
+
     return (
+        <>
         <aside className="flex w-64 flex-col border-r border-stone-200 bg-stone-50/50 dark:border-stone-800 dark:bg-stone-900/30">
             <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm font-medium text-stone-600 dark:text-stone-300">剧本项目</span>
                 <Button type="text" size="small" icon={<Plus className="size-4" />} onClick={() => setCreating(true)} />
             </div>
-
-            {/* 新建表单 */}
-            {creating && (
-                <div className="mx-3 mb-3 space-y-2 rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-800">
-                    <Input size="small" placeholder="项目名称（可选）" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-                    <Input.TextArea size="small" rows={2} placeholder="灵感种子：一句话描述你的想法..." value={newSeed} onChange={(e) => setNewSeed(e.target.value)} />
-                    <div className="flex gap-2">
-                        <Button size="small" type="primary" onClick={handleCreate}>
-                            创建
-                        </Button>
-                        <Button size="small" onClick={() => setCreating(false)}>
-                            取消
-                        </Button>
-                    </div>
-                </div>
-            )}
 
             {/* 项目列表 */}
             <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -94,5 +113,108 @@ export function ScriptProjectSidebar() {
                 )}
             </div>
         </aside>
+
+        {/* 新建项目弹窗：左移宽幅 + 右侧灵感风暴画布 */}
+        <Modal
+            open={creating}
+            onOk={handleCreate}
+            onCancel={handleCloseCreate}
+            okText="开始创作"
+            cancelText="取消"
+            okButtonProps={{ disabled: !newSeed.trim(), size: "large" }}
+            cancelButtonProps={{ size: "large" }}
+            width={1100}
+            centered
+            destroyOnHidden
+            title={null}
+            footer={null}
+            styles={{ body: { padding: 0 } }}
+        >
+            <div className="flex min-h-[560px]">
+                {/* 左侧：表单区 */}
+                <div className="flex w-[55%] flex-col">
+                    {/* 顶部装饰区 */}
+                    <div className="relative overflow-hidden bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 px-7 py-5">
+                        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 80%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)" }} />
+                        <div className="relative flex items-center gap-3">
+                            <div className="flex size-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                                <Sparkles className="size-4 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-semibold text-white">新建剧本项目</h2>
+                                <p className="mt-0.5 text-xs text-white/70">写下灵感种子，AI 将为你展开一个完整的故事世界</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 表单 */}
+                    <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-7 py-5">
+                        <div>
+                            <label className="mb-1.5 block text-sm font-medium text-stone-600 dark:text-stone-300">项目名称</label>
+                            <Input size="large" placeholder="给你的故事起个名字（可选）" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+                        </div>
+
+                        <div className="flex-1">
+                            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-stone-600 dark:text-stone-300">
+                                <Lightbulb className="size-4 text-amber-500" />
+                                灵感种子
+                                <span className="text-red-500">*</span>
+                            </label>
+                            <Input.TextArea
+                                rows={8}
+                                className="!text-base !leading-relaxed"
+                                placeholder={"在这里尽情描述你的想法，越详细越好。\n\n也可以点击右侧灵感泡泡快速填入…"}
+                                value={newSeed}
+                                onChange={(e) => setNewSeed(e.target.value)}
+                                autoFocus
+                            />
+                            <p className="mt-1.5 text-xs text-stone-400">提示：可以包含角色、场景、情绪、冲突等任何元素</p>
+                        </div>
+
+                        {/* 灵感示例标签 + AI 刷新 */}
+                        <div>
+                            <div className="mb-1.5 flex items-center justify-between">
+                                <p className="text-xs font-medium text-stone-400">快速填入</p>
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={refreshingSeeds ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                                    onClick={handleRefreshSeeds}
+                                    disabled={refreshingSeeds}
+                                    className="!text-xs !text-stone-400 hover:!text-blue-500"
+                                >
+                                    {refreshingSeeds ? "筛选中…" : "AI 刷新"}
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {seedExamples.map((ex) => (
+                                    <Tag
+                                        key={ex}
+                                        className="cursor-pointer rounded-full border-stone-200 px-2.5 py-0.5 text-[11px] transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-stone-600 dark:hover:border-blue-600 dark:hover:bg-blue-950/30"
+                                        onClick={() => setNewSeed(ex)}
+                                    >
+                                        {ex.length > 14 ? ex.slice(0, 14) + "…" : ex}
+                                    </Tag>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 底部操作 */}
+                        <div className="flex items-center justify-end gap-3 border-t border-stone-100 pt-4 dark:border-stone-800">
+                            <Button size="large" onClick={handleCloseCreate}>取消</Button>
+                            <Button size="large" type="primary" icon={<Sparkles className="size-4" />} onClick={handleCreate} disabled={!newSeed.trim()}>
+                                开始创作
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 右侧：灵感风暴画布 */}
+                <div className="w-[45%]">
+                    <SeedStormCanvas config={config} seed={newSeed} onFillSeed={(text) => setNewSeed((prev) => prev ? prev + "，" + text : text)} />
+                </div>
+            </div>
+        </Modal>
+        </>
     );
 }
