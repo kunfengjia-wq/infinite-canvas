@@ -37,11 +37,18 @@ export function useImageEditorViewport(image: ImageSize | null, open: boolean) {
             const target = event.target instanceof Element ? event.target : null;
             if (target?.closest("input,textarea,[contenteditable='true']")) return;
             event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            if (document.activeElement instanceof HTMLElement && document.activeElement.matches("button,a,[role='button']")) document.activeElement.blur();
             spacePressedRef.current = true;
             setSpacePressed(true);
         };
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (event.code === "Space") releaseSpace();
+            if (event.code !== "Space" || !spacePressedRef.current) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            releaseSpace();
         };
         window.addEventListener("keydown", handleKeyDown, true);
         window.addEventListener("keyup", handleKeyUp, true);
