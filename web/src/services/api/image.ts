@@ -333,11 +333,16 @@ function aiApiUrl(config: AiConfig, path: string) {
     const url = buildApiUrl(config.baseUrl, path);
     // 开发环境：通过 vite 代理绕过 CORS 限制
     if (import.meta.env.DEV) {
-        const proxyTarget = (import.meta.env.VITE_AI_PROXY_TARGET || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com").replace(/\/+$/, "");
-        const proxyRewrite = (import.meta.env.VITE_AI_PROXY_REWRITE || "/compatible-mode").replace(/\/+$/, "");
-        const origin = proxyTarget + proxyRewrite;
-        if (url.startsWith(origin)) {
-            return url.replace(origin, "/ai-cors-proxy");
+        const proxyRules: Array<{ origin: string; rewrite: string }> = [
+            { origin: ((import.meta.env.VITE_AI_PROXY_TARGET || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com").replace(/\/+$/, "") + (import.meta.env.VITE_AI_PROXY_REWRITE || "/compatible-mode").replace(/\/+$/, "")), rewrite: "/ai-cors-proxy" },
+            { origin: "https://dashscope.aliyuncs.com/compatible-mode", rewrite: "/ai-cors-proxy-dashscope" },
+            { origin: "https://api.siliconflow.cn", rewrite: "/ai-cors-proxy-siliconflow" },
+            { origin: "https://ark.cn-beijing.volces.com/api/v3", rewrite: "/ai-cors-proxy-ark" },
+        ];
+        for (const rule of proxyRules) {
+            if (url.startsWith(rule.origin)) {
+                return url.replace(rule.origin, rule.rewrite);
+            }
         }
     }
     return url;
@@ -980,6 +985,12 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
     try {
         if (requestConfig.apiFormat === "gemini") {
             const answer = (await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages), onDelta, options)).content || "没有返回内容";
+            if (answer === "没有返回内容") onDelta(answer);
+            return answer;
+        }
+        // 百炼/硅基流动仅支持 /chat/completions，跳过 /responses 尝试
+        if (requestConfig.apiFormat === "dashscope" || requestConfig.apiFormat === "siliconflow") {
+            const answer = (await requestChatCompletionsStreaming(requestConfig, inputMessages, onDelta, options)).content || "没有返回内容";
             if (answer === "没有返回内容") onDelta(answer);
             return answer;
         }

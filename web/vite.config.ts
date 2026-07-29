@@ -76,7 +76,25 @@ export default defineConfig({
     },
     server: {
         proxy: {
-            // 开发环境代理：解决百炼等 AI API 的 CORS 限制
+            // 开发环境代理：解决 AI API 的 CORS 限制
+            "/ai-cors-proxy-dashscope": {
+                target: "https://dashscope.aliyuncs.com",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/ai-cors-proxy-dashscope/, "/compatible-mode"),
+            },
+            "/ai-cors-proxy-siliconflow": {
+                target: "https://api.siliconflow.cn",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/ai-cors-proxy-siliconflow/, ""),
+            },
+            "/ai-cors-proxy-ark": {
+                target: "https://ark.cn-beijing.volces.com",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/ai-cors-proxy-ark/, "/api/v3"),
+            },
             "/ai-cors-proxy": {
                 target: process.env.VITE_AI_PROXY_TARGET || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com",
                 changeOrigin: true,
