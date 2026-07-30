@@ -17,3 +17,9 @@ web/public/plugins
 plugins/canvas/*/dist
 plugins/canvas/*/node_modules
 web/public/plugins
+# Python
+__pycache__/
+*.pyc
+tts-server/test_output.wav
+tts-server/*.log
+tts-server/downloads/
