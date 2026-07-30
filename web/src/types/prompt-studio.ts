@@ -79,7 +79,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     // 动画类
     { id: "anime", label: "日系动漫", keywords: "anime style, cel shading, vibrant colors, detailed eyes, clean lines, manga inspired", category: "动画类", mediaType: "both" },
     { id: "western_comics", label: "美漫", keywords: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel", category: "动画类", mediaType: "both" },
-    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing, global illumination, subsurface scattering, clean topology, smooth geometry, digital sculpture, 3D modeling", category: "动画类", mediaType: "both" },
+    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, stylized 3D, clean topology, smooth geometry, digital sculpture, 3D modeling, vibrant materials, game art", category: "动画类", mediaType: "both" },
     { id: "stop_motion", label: "定格动画", keywords: "stop motion, claymation, miniature, handcrafted, tactile, laika studios", category: "动画类", mediaType: "both" },
     { id: "ink_animation", label: "水墨动画", keywords: "chinese ink animation, brush strokes, flowing ink, traditional animation, ethereal movement", category: "动画类", mediaType: "both" },
     { id: "pixel_art", label: "像素艺术", keywords: "pixel art, 8-bit, 16-bit, retro game, sprite, nostalgic gaming", category: "动画类", mediaType: "both" },

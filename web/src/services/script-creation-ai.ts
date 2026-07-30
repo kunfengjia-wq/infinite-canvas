@@ -169,6 +169,27 @@ export async function aiGenerateSettings(
     });
 }
 
+/** 重新生成单个角色（保持与方案其他元素的兼容性） */
+export async function aiRegenerateCharacter(
+    config: AiConfig,
+    proposal: SettingProposal,
+    characterId: string,
+    onDelta?: (text: string) => void,
+): Promise<SettingProposal["characters"][number]> {
+    return withRetry(async () => {
+        const target = proposal.characters.find((c) => c.id === characterId);
+        const others = proposal.characters.filter((c) => c.id !== characterId);
+        const othersCtx = others.map((c) => `${c.name}(${c.role})：${c.personality}，动机：${c.motivation}`).join("\n");
+        const messages: AiTextMessage[] = [
+            { role: "system", content: `你是角色设计专家。请重新设计一个角色，保持与已有角色和世界观的兼容性。\n\n输出严格 JSON：\n{"name":"...","role":"主角/对手/配角/导师/盟友","personality":"...","motivation":"...","arc":"...","appearance":"...","relationships":"..."}` },
+            { role: "user", content: `方案概述：${proposal.summary}\n世界观：${proposal.world.environment}，规则：${proposal.world.rules}\n核心矛盾：${proposal.conflict.mainConflict}\n\n已有角色：\n${othersCtx}\n\n需要重新设计的角色（原设定：${target?.name} - ${target?.role} - ${target?.personality}）\n\n请生成一个全新的替代角色（保持相同 role “${target?.role}”，但名字、性格、动机、弧光全部重新设计）：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        const item = parseJsonObject<any>(raw);
+        return { ...item, id: characterId, role: item.role ?? target?.role ?? "配角" };
+    });
+}
+
 // ─── Phase 3：结构方案生成 ──────────────────────────────────────
 
 const STRUCTURE_SYSTEM = `你是一位故事结构大师，精通三幕式、五段式、Save the Cat 节拍表、网文卷纲等多种叙事结构。
@@ -270,17 +291,28 @@ export async function aiGenerateSegment(
     return raw.trim();
 }
 
-/** 重写段落 */
+/** 重写段落（传入设定+前文上下文，避免破坏一致性） */
 export async function aiRewriteSegment(
     config: AiConfig,
     beat: StoryBeat,
     currentContent: string,
     instruction: string,
+    setting?: SettingProposal,
+    previousContent?: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
+    const settingContext = setting ? buildSettingContext(setting) : "";
+    const userParts: string[] = [
+        `【修改意见】${instruction}`,
+    ];
+    if (settingContext) userParts.push(`\n【故事设定（保持一致性）】\n${settingContext}`);
+    if (previousContent) userParts.push(`\n【前一段内容（末尾300字，确保衔接）】\n${previousContent.slice(-300)}`);
+    userParts.push(`\n【当前内容】\n${currentContent}`);
+    userParts.push("\n请根据修改意见重写，保持角色/设定/语气一致，输出完整内容：");
+
     const messages: AiTextMessage[] = [
         { role: "system", content: SEGMENT_WRITER_SYSTEM },
-        { role: "user", content: `请根据以下修改意见重写这段内容：\n\n【修改意见】${instruction}\n\n【当前内容】\n${currentContent}\n\n请输出重写后的完整内容：` },
+        { role: "user", content: userParts.join("\n") },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
     return raw.trim();
@@ -310,13 +342,46 @@ export async function aiConsistencyCheck(
 ): Promise<string> {
     const systemPrompt = (await getSkillPrompt("sc_consistency_check")) ?? `你是剧本审校专家。检查剧本的一致性，输出结构化报告：\n1. 角色一致性（名字/性格/外貌是否前后矛盾）\n2. 设定一致性（世界观规则是否被违反）\n3. 情节逻辑（是否有不合理跳跃）\n4. 伏笔回收（是否有未回收的伏笔）\n5. 节奏评估（整体节奏是否合理）\n\n格式：每项给出 ✅通过 或 ⚠️问题+具体位置+修改建议。最后给出总评。`;
     const settingContext = buildSettingContext(setting);
-    const messages: AiTextMessage[] = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `【设定】\n${settingContext}\n\n【完整剧本】\n${fullScript.slice(0, 12000)}\n\n请进行一致性检查：` },
-    ];
-    const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
-    recordGeneration({ skillId: "sc_consistency_check", inputText: fullScript.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
-    return raw.trim();
+
+    // 超长剧本分块检查（每块 10000 字，避免截断丢失后半部分）
+    const CHUNK_SIZE = 10000;
+    if (fullScript.length <= CHUNK_SIZE) {
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `【设定】\n${settingContext}\n\n【完整剧本】\n${fullScript}\n\n请进行一致性检查：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        recordGeneration({ skillId: "sc_consistency_check", inputText: fullScript.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
+        return raw.trim();
+    }
+
+    // 分块检查
+    const chunks: string[] = [];
+    let pos = 0;
+    while (pos < fullScript.length) {
+        let end = Math.min(pos + CHUNK_SIZE, fullScript.length);
+        if (end < fullScript.length) {
+            const breakPoint = fullScript.lastIndexOf("\n\n", end);
+            if (breakPoint > pos + CHUNK_SIZE * 0.5) end = breakPoint;
+        }
+        chunks.push(fullScript.slice(pos, end));
+        pos = end;
+    }
+
+    const reports: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+        onDelta?.(`正在检查第 ${i + 1}/${chunks.length} 段...\n`);
+        const overlap = i > 0 ? chunks[i - 1].slice(-500) : "";
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `【设定】\n${settingContext}\n\n${overlap ? `【前段末尾（上下文参考）】\n${overlap}\n\n` : ""}【剧本第 ${i + 1}/${chunks.length} 段】\n${chunks[i]}\n\n请对这一段进行一致性检查：` },
+        ];
+        const raw = await requestImageQuestion(config, messages, () => {});
+        reports.push(`## 第 ${i + 1} 段检查\n${raw.trim()}`);
+    }
+
+    recordGeneration({ skillId: "sc_consistency_check", inputText: fullScript.slice(0, 300), outputText: reports.join("").slice(0, 500), model: config.model });
+    return reports.join("\n\n---\n\n");
 }
 
 // ─── 辅助 ─────────────────────────────────────────────────────
@@ -340,7 +405,7 @@ export async function aiFixConsistencyIssues(
     const settingContext = buildSettingContext(setting);
     const messages: AiTextMessage[] = [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `【设定】\n${settingContext}\n\n【一致性检查报告】\n${report}\n\n【原始剧本】\n${fullScript.slice(0, 12000)}\n\n请修复上述问题，输出完整剧本：` },
+        { role: "user", content: `【设定】\n${settingContext}\n\n【一致性检查报告】\n${report}\n\n【原始剧本】\n${fullScript.slice(0, 15000)}\n\n请修复上述问题，输出完整剧本：` },
     ];
     const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
     recordGeneration({ skillId: "sc_consistency_fix", inputText: report.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });

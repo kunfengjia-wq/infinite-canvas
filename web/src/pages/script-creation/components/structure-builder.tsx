@@ -1,5 +1,5 @@
-import { GitBranch, LoaderCircle, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { GitBranch, GripVertical, LoaderCircle, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
 import { App, Button, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
@@ -18,7 +18,7 @@ const STRUCTURE_COLORS: Record<string, string> = {
 
 export function StructureBuilder({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setStructureProposals, confirmStructure, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setStructureProposals, reorderBeatsInProposal, confirmStructure, saveCurrent } = useScriptCreationStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     if (!current) return null;
@@ -83,7 +83,7 @@ export function StructureBuilder({ config }: { config: AiConfig }) {
                 <>
                     <div className="space-y-4">
                         {proposals.map((p) => (
-                            <StructureCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} />
+                            <StructureCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} onReorder={reorderBeatsInProposal} />
                         ))}
                     </div>
 
@@ -101,8 +101,30 @@ export function StructureBuilder({ config }: { config: AiConfig }) {
     );
 }
 
-function StructureCard({ proposal, selected, onSelect }: { proposal: StructureProposal; selected: boolean; onSelect: () => void }) {
+function StructureCard({ proposal, selected, onSelect, onReorder }: { proposal: StructureProposal; selected: boolean; onSelect: () => void; onReorder: (proposalId: string, from: number, to: number) => void }) {
     const maxIntensity = Math.max(...proposal.beats.map((b) => b.intensity), 1);
+    const dragIndex = useRef<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    // SVG 曲线坐标
+    const W = 100, H = 56, PAD = 4;
+    const points = proposal.beats.map((beat, i) => {
+        const x = proposal.beats.length > 1 ? PAD + (i / (proposal.beats.length - 1)) * (W - PAD * 2) : W / 2;
+        const y = H - PAD - (beat.intensity / maxIntensity) * (H - PAD * 2);
+        return { x, y };
+    });
+    const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+    const handleDragStart = (i: number) => { dragIndex.current = i; };
+    const handleDragOver = (e: React.DragEvent, i: number) => { e.preventDefault(); setDragOverIndex(i); };
+    const handleDrop = (i: number) => {
+        if (dragIndex.current !== null && dragIndex.current !== i) {
+            onReorder(proposal.id, dragIndex.current, i);
+        }
+        dragIndex.current = null;
+        setDragOverIndex(null);
+    };
+
     return (
         <div
             onClick={onSelect}
@@ -120,23 +142,22 @@ function StructureCard({ proposal, selected, onSelect }: { proposal: StructurePr
             </div>
             <p className="mt-1 text-sm text-stone-500">{proposal.overview}</p>
 
-            {/* 情绪曲线 */}
+            {/* 情绪曲线 SVG */}
             <div className="mt-4">
                 <p className="mb-2 text-xs font-medium text-stone-400">情绪曲线</p>
-                <div className="flex h-16 items-end gap-1">
-                    {proposal.beats.map((beat) => (
-                        <div key={beat.id} className="group relative flex-1">
-                            <div
-                                className={cn("w-full rounded-t transition-colors", selected ? "bg-blue-400" : "bg-stone-300 dark:bg-stone-600")}
-                                style={{ height: `${(beat.intensity / maxIntensity) * 56 + 8}px` }}
-                            />
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden w-40 -translate-x-1/2 rounded-lg bg-stone-900 p-2 text-xs text-white shadow-lg group-hover:block dark:bg-stone-700">
-                                <p className="font-medium">{beat.label}</p>
-                                <p className="mt-0.5 text-stone-300">{beat.summary}</p>
-                            </div>
-                        </div>
+                <svg viewBox={`0 0 ${W} ${H}`} className="h-16 w-full" preserveAspectRatio="none">
+                    <polyline
+                        points={polyline}
+                        fill="none"
+                        stroke={selected ? "#60a5fa" : "#a8a29e"}
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                    {points.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r="2" fill={selected ? "#3b82f6" : "#78716c"} />
                     ))}
-                </div>
+                </svg>
                 <div className="mt-1 flex gap-1">
                     {proposal.beats.map((beat) => (
                         <span key={beat.id} className="flex-1 truncate text-center text-[10px] text-stone-400">
@@ -146,10 +167,23 @@ function StructureCard({ proposal, selected, onSelect }: { proposal: StructurePr
                 </div>
             </div>
 
-            {/* 节拍列表 */}
+            {/* 节拍列表（可拖拽排序） */}
             <div className="mt-3 space-y-1.5">
-                {proposal.beats.map((beat) => (
-                    <div key={beat.id} className="flex items-start gap-2 text-xs">
+                {proposal.beats.map((beat, i) => (
+                    <div
+                        key={beat.id}
+                        draggable={selected}
+                        onDragStart={() => handleDragStart(i)}
+                        onDragOver={(e) => handleDragOver(e, i)}
+                        onDrop={() => handleDrop(i)}
+                        onDragEnd={() => { dragIndex.current = null; setDragOverIndex(null); }}
+                        className={cn(
+                            "flex items-start gap-2 rounded-md px-1.5 py-1 text-xs transition-colors",
+                            selected && "cursor-grab active:cursor-grabbing",
+                            dragOverIndex === i && "bg-blue-100 dark:bg-blue-900/30",
+                        )}
+                    >
+                        {selected && <GripVertical className="mt-0.5 size-3 shrink-0 text-stone-300 dark:text-stone-600" />}
                         <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[10px] text-stone-500 dark:bg-stone-700">{beat.index + 1}</span>
                         <span className="font-medium">{beat.label}</span>
                         <span className="text-stone-500">{beat.summary}</span>

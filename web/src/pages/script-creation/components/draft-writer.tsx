@@ -57,7 +57,8 @@ export function DraftWriter({ config }: { config: AiConfig }) {
         setRewritingId(segmentId);
         setProcessing(true);
         try {
-            const content = await aiRewriteSegment(config, beat, segment.content, rewriteInstruction.trim());
+            const prevSegment = segments[segment.index - 1];
+            const content = await aiRewriteSegment(config, beat, segment.content, rewriteInstruction.trim(), current.finalSetting!, prevSegment?.content);
             updateSegment(segmentId, { content, status: "draft", rewriteCount: segment.rewriteCount + 1 });
             setRewriteInstruction("");
             message.success("已重写");

@@ -555,23 +555,63 @@ function splitScriptIntoChunks(script: string, maxSize: number): string[] {
     return finalChunks;
 }
 
-/** 合并多块提取结果，按 name 去重 */
+/** 合并多块提取结果，按 name+type+描述相似度去重 */
 function mergeAssets(results: StoryAssets[]): StoryAssets {
     const merged: StoryAssets = { characters: [], locations: [], props: [], products: [] };
-    const seen = { characters: new Set<string>(), locations: new Set<string>(), props: new Set<string>(), products: new Set<string>() };
 
     for (const result of results) {
         for (const key of ["characters", "locations", "props", "products"] as const) {
             for (const item of result[key] ?? []) {
-                const name = (item as { name?: string }).name?.trim().toLowerCase();
-                if (name && !seen[key].has(name)) {
-                    seen[key].add(name);
+                const name = (item as { name?: string }).name?.trim().toLowerCase() ?? "";
+                const desc = getAssetDescription(item).toLowerCase();
+
+                // 查找是否已存在相似资产（同名+描述重叠度高）
+                const existingIdx = (merged[key] as { name?: string }[]).findIndex((existing) => {
+                    const existName = (existing.name ?? "").trim().toLowerCase();
+                    if (existName !== name) return false;
+                    // 同名时检查描述相似度（简单关键词重叠）
+                    const existDesc = getAssetDescription(existing).toLowerCase();
+                    return textSimilarity(desc, existDesc) > 0.6;
+                });
+
+                if (existingIdx === -1) {
+                    // 新资产，直接加入
                     (merged[key] as unknown[]).push(item);
+                } else {
+                    // 同名且相似，合并描述（取更长的描述）
+                    const existing = (merged[key] as Record<string, unknown>[])[existingIdx];
+                    const existDesc = getAssetDescription(existing);
+                    if (desc.length > existDesc.length) {
+                        // 用更详细的替换
+                        (merged[key] as unknown[])[existingIdx] = item;
+                    }
                 }
             }
         }
     }
     return merged;
+}
+
+/** 提取资产的主要描述文本 */
+function getAssetDescription(item: unknown): string {
+    const obj = item as Record<string, unknown>;
+    return [obj.appearance, obj.description, obj.keywords, obj.costume, obj.personality]
+        .filter(Boolean)
+        .map(String)
+        .join(" ");
+}
+
+/** 简单文本相似度（基于关键词重叠率） */
+function textSimilarity(a: string, b: string): number {
+    if (!a || !b) return 0;
+    const wordsA = new Set(a.split(/[\s,，、;；]+/).filter((w) => w.length > 1));
+    const wordsB = new Set(b.split(/[\s,，、;；]+/).filter((w) => w.length > 1));
+    if (wordsA.size === 0 || wordsB.size === 0) return 0;
+    let overlap = 0;
+    for (const w of wordsA) {
+        if (wordsB.has(w)) overlap++;
+    }
+    return overlap / Math.min(wordsA.size, wordsB.size);
 }
 
 /** 单次资产提取（原始逻辑） */

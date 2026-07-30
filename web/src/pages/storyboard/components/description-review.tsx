@@ -1,6 +1,6 @@
-import { Camera, Copy, LoaderCircle, Send, Sparkles, Wand2 } from "lucide-react";
+import { Camera, Copy, LoaderCircle, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Collapse, Empty, Input, Tag, Tooltip } from "antd";
+import { App, Button, Card, Collapse, Empty, Input, Progress, Tag, Tooltip } from "antd";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiGenerateVisualDescription, buildAssetsContext } from "@/services/storyboard-ai";
@@ -14,6 +14,8 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
     const { current, processing, setProcessing, updateShotDescription, confirmDescriptions, saveCurrent } = useStoryboardStore();
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [batchGenerating, setBatchGenerating] = useState(false);
+    const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+    const [failedShots, setFailedShots] = useState<{ sceneId: string; shotId: string; action: string }[]>([]);
 
     if (!current) return null;
     const scenes = current.scenes ?? [];
@@ -47,11 +49,67 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
     const handleBatchGenerate = async () => {
         setBatchGenerating(true);
         setProcessing(true);
+        setFailedShots([]);
         const assetsCtx = buildAssetsContext(current.assets);
         const styleHint = current.visualStyle ? `，视觉风格：${current.visualStyle}` : "";
+        const pending = allShots.filter(({ shot }) => !shot.visualDescription.trim());
+        setBatchProgress({ done: 0, total: pending.length });
+        const CONCURRENCY = 3;
         let success = 0;
-        for (const { scene, shot } of allShots) {
-            if (shot.visualDescription.trim()) continue; // 跳过已有描述
+        const failures: { sceneId: string; shotId: string; action: string }[] = [];
+
+        for (let i = 0; i < pending.length; i += CONCURRENCY) {
+            const batch = pending.slice(i, i + CONCURRENCY);
+            const results = await Promise.allSettled(
+                batch.map(async ({ scene, shot }) => {
+                    const sceneContext = `${scene.title} - ${scene.summary}${scene.mood ? `，氛围：${scene.mood}` : ""}${scene.colorTone ? `，色调：${scene.colorTone}` : ""}${styleHint}`;
+                    const description = await aiGenerateVisualDescription(
+                        config,
+                        { shotType: shot.shotType, angle: shot.angle, action: shot.action, mood: shot.mood, dialogue: shot.dialogue, cameraMovement: shot.cameraMovement, lens: shot.lens, lighting: shot.lighting },
+                        sceneContext,
+                        assetsCtx || undefined,
+                        undefined,
+                        current.visualStyle,
+                    );
+                    return { sceneId: scene.id, shotId: shot.id, description };
+                }),
+            );
+            for (let j = 0; j < results.length; j++) {
+                const result = results[j];
+                if (result.status === "fulfilled") {
+                    updateShotDescription(result.value.sceneId, result.value.shotId, result.value.description);
+                    success++;
+                } else {
+                    const item = batch[j];
+                    failures.push({ sceneId: item.scene.id, shotId: item.shot.id, action: item.shot.action });
+                }
+            }
+            setBatchProgress({ done: Math.min(i + CONCURRENCY, pending.length), total: pending.length });
+        }
+
+        setBatchGenerating(false);
+        setProcessing(false);
+        setFailedShots(failures);
+        if (failures.length === 0) {
+            message.success(`批量生成完成，成功 ${success} 条`);
+        } else {
+            message.warning(`成功 ${success} 条，失败 ${failures.length} 条`);
+        }
+    };
+
+    /** 重试失败的镜头 */
+    const handleRetryFailed = async () => {
+        if (failedShots.length === 0) return;
+        setBatchGenerating(true);
+        setProcessing(true);
+        const assetsCtx = buildAssetsContext(current.assets);
+        const styleHint = current.visualStyle ? `，视觉风格：${current.visualStyle}` : "";
+        const stillFailed: typeof failedShots = [];
+
+        for (const item of failedShots) {
+            const scene = scenes.find((s) => s.id === item.sceneId);
+            const shot = scene?.shots.find((sh) => sh.id === item.shotId);
+            if (!scene || !shot) continue;
             try {
                 const sceneContext = `${scene.title} - ${scene.summary}${scene.mood ? `，氛围：${scene.mood}` : ""}${scene.colorTone ? `，色调：${scene.colorTone}` : ""}${styleHint}`;
                 const description = await aiGenerateVisualDescription(
@@ -63,14 +121,15 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                     current.visualStyle,
                 );
                 updateShotDescription(scene.id, shot.id, description);
-                success++;
             } catch {
-                // 批量模式跳过单条失败
+                stillFailed.push(item);
             }
         }
+
         setBatchGenerating(false);
         setProcessing(false);
-        message.success(`批量生成完成，成功 ${success} 条`);
+        setFailedShots(stillFailed);
+        message.success(stillFailed.length === 0 ? "重试全部成功" : `仍有 ${stillFailed.length} 条失败`);
     };
 
     const handleConfirm = async () => {
@@ -96,8 +155,18 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                         onClick={handleBatchGenerate}
                         disabled={batchGenerating || processing || allShots.length === 0}
                     >
-                        {batchGenerating ? "批量生成中..." : "批量生成未描述镜头"}
+                        {batchGenerating ? `生成中 ${batchProgress.done}/${batchProgress.total}` : "批量生成未描述镜头"}
                     </Button>
+                    {failedShots.length > 0 && (
+                        <Button
+                            icon={<RotateCcw className="size-4" />}
+                            onClick={handleRetryFailed}
+                            disabled={batchGenerating || processing}
+                            danger
+                        >
+                            重试失败（{failedShots.length}）
+                        </Button>
+                    )}
                     <Button type="primary" disabled={describedCount === 0} onClick={handleConfirm}>
                         确认描述（{describedCount}/{allShots.length}）
                     </Button>
@@ -108,6 +177,10 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                     )}
                 </div>
             </div>
+
+            {batchGenerating && batchProgress.total > 0 && (
+                <Progress percent={Math.round((batchProgress.done / batchProgress.total) * 100)} size="small" className="mb-4" />
+            )}
 
             {allShots.length === 0 ? (
                 <Empty description="暂无镜头，请先完成镜头细化步骤" className="py-12" />
@@ -135,11 +208,11 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                                             {shot.duration && <Tag>{shot.duration}</Tag>}
                                             <span className="ml-1 min-w-0 flex-1 truncate text-xs text-stone-500">{shot.action}</span>
                                             <div className="flex gap-1">
-                                                <Tooltip title="AI 生成画面描述">
+                                                <Tooltip title={shot.visualDescription.trim() ? "重新生成画面描述" : "AI 生成画面描述"}>
                                                     <Button
                                                         type="text"
                                                         size="small"
-                                                        icon={generatingId === shot.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                                                        icon={generatingId === shot.id ? <LoaderCircle className="size-3.5 animate-spin" /> : shot.visualDescription.trim() ? <RotateCcw className="size-3.5" /> : <Sparkles className="size-3.5" />}
                                                         disabled={generatingId === shot.id || batchGenerating}
                                                         onClick={() => handleGenerate(scene, shot)}
                                                     />

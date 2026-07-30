@@ -45,10 +45,12 @@ type ScriptCreationStore = {
 
     // ─── Phase 2：设定构建 ───
     setSettingProposals: (proposals: SettingProposal[]) => void;
+    updateCharacterInProposal: (proposalId: string, characterId: string, character: SettingProposal["characters"][number]) => void;
     confirmSetting: (proposal: SettingProposal) => void;
 
     // ─── Phase 3：结构搭建 ───
     setStructureProposals: (proposals: StructureProposal[]) => void;
+    reorderBeatsInProposal: (proposalId: string, fromIndex: number, toIndex: number) => void;
     confirmStructure: (proposal: StructureProposal) => void;
 
     // ─── Phase 4：逐段创作 ───
@@ -208,6 +210,17 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
             return { current: { ...state.current, settingProposals: proposals } };
         }),
 
+    updateCharacterInProposal: (proposalId, characterId, character) =>
+        set((state) => {
+            if (!state.current) return state;
+            const proposals = state.current.settingProposals.map((p) =>
+                p.id === proposalId
+                    ? { ...p, characters: p.characters.map((c) => (c.id === characterId ? character : c)) }
+                    : p,
+            );
+            return { current: { ...state.current, settingProposals: proposals } };
+        }),
+
     confirmSetting: (proposal) => {
         set((state) => {
             if (!state.current) return state;
@@ -220,6 +233,19 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
     setStructureProposals: (proposals) =>
         set((state) => {
             if (!state.current) return state;
+            return { current: { ...state.current, structureProposals: proposals } };
+        }),
+
+    reorderBeatsInProposal: (proposalId, fromIndex, toIndex) =>
+        set((state) => {
+            if (!state.current) return state;
+            const proposals = state.current.structureProposals.map((p) => {
+                if (p.id !== proposalId) return p;
+                const beats = [...p.beats];
+                const [moved] = beats.splice(fromIndex, 1);
+                beats.splice(toIndex, 0, moved);
+                return { ...p, beats: beats.map((b, i) => ({ ...b, index: i })) };
+            });
             return { current: { ...state.current, structureProposals: proposals } };
         }),
 

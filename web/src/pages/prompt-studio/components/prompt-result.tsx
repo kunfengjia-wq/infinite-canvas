@@ -1,6 +1,6 @@
-import { Copy, LoaderCircle, RefreshCw, Sparkles, Star, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Copy, History, LoaderCircle, RefreshCw, Sparkles, Star, ThumbsDown, ThumbsUp, Trash2, Wand2, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Empty, Input, Popconfirm, Tag, Tooltip } from "antd";
+import { App, Button, Card, Empty, Input, Popconfirm, Popover, Tag, Tooltip } from "antd";
 
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { aiGeneratePrompt, aiOptimizePrompt, aiScorePrompt, type QualityScoreResult } from "@/services/prompt-studio-ai";
@@ -16,9 +16,24 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
     const { current, updateEntry, removeEntry } = usePromptStudioStore();
     const [filterCategory, setFilterCategory] = useState<PromptCategory | "all">("all");
     const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+    const [streamingText, setStreamingText] = useState<Record<string, string>>({});
     const [optimizingId, setOptimizingId] = useState<string | null>(null);
     const [scoringId, setScoringId] = useState<string | null>(null);
     const [scoreResults, setScoreResults] = useState<Record<string, QualityScoreResult>>({});
+    const [batchOptimizing, setBatchOptimizing] = useState(false);
+    const [batchScoring, setBatchScoring] = useState(false);
+    const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+    const [failedIds, setFailedIds] = useState<string[]>([]);
+    const [failedAction, setFailedAction] = useState<"optimize" | "score" | null>(null);
+    const [versionHistory, setVersionHistory] = useState<Record<string, { prompt: string; negativePrompt?: string; time: number }[]>>({});
+
+    /** 保存版本历史（最多保留 3 版） */
+    const pushHistory = (entryId: string, prompt: string, negativePrompt?: string) => {
+        setVersionHistory((prev) => {
+            const list = prev[entryId] ?? [];
+            return { ...prev, [entryId]: [{ prompt, negativePrompt, time: Date.now() }, ...list].slice(0, 3) };
+        });
+    };
 
     if (!current || current.entries.length === 0) {
         return (
@@ -33,20 +48,27 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
 
     const handleRegenerate = async (entryId: string, input: string, platform: string, styles?: { id: string; weight: number }[], customStyle?: string) => {
         setRegeneratingId(entryId);
+        setStreamingText((prev) => ({ ...prev, [entryId]: "" }));
         try {
-            const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles, customStyle });
+            const entry = current?.entries.find((e) => e.id === entryId);
+            if (entry) pushHistory(entryId, entry.prompt, entry.negativePrompt);
+            const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles, customStyle }, (delta) => {
+                setStreamingText((prev) => ({ ...prev, [entryId]: (prev[entryId] ?? "") + delta }));
+            });
             updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
             message.success("已重新生成");
         } catch (error) {
             onError(error instanceof Error ? error.message : "重新生成失败");
         } finally {
             setRegeneratingId(null);
+            setStreamingText((prev) => { const n = { ...prev }; delete n[entryId]; return n; });
         }
     };
 
     const handleOptimize = async (entryId: string, prompt: string, platform: string) => {
         setOptimizingId(entryId);
         try {
+            pushHistory(entryId, prompt, current?.entries.find((e) => e.id === entryId)?.negativePrompt);
             const result = await aiOptimizePrompt(config, prompt, platform as never);
             updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
             message.success(result.note ? `已优化：${result.note}` : "已优化");
@@ -68,6 +90,93 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         } finally {
             setScoringId(null);
         }
+    };
+
+    /** 批量优化所有条目 */
+    const handleBatchOptimize = async () => {
+        setBatchOptimizing(true);
+        setFailedIds([]);
+        const entries = filteredEntries;
+        setBatchProgress({ done: 0, total: entries.length });
+        const failures: string[] = [];
+        const CONCURRENCY = 3;
+
+        for (let i = 0; i < entries.length; i += CONCURRENCY) {
+            const batch = entries.slice(i, i + CONCURRENCY);
+            const results = await Promise.allSettled(
+                batch.map((entry) => aiOptimizePrompt(config, entry.prompt, entry.platform as never)),
+            );
+            results.forEach((result, j) => {
+                const entry = batch[j];
+                if (result.status === "fulfilled") {
+                    updateEntry(entry.id, { prompt: result.value.prompt, negativePrompt: result.value.negativePrompt, translation: result.value.translation, characterMapping: result.value.characterMapping });
+                } else {
+                    failures.push(entry.id);
+                }
+            });
+            setBatchProgress({ done: Math.min(i + CONCURRENCY, entries.length), total: entries.length });
+        }
+
+        setBatchOptimizing(false);
+        setFailedIds(failures);
+        setFailedAction(failures.length > 0 ? "optimize" : null);
+        message.success(failures.length === 0 ? `已优化 ${entries.length} 条` : `优化完成，${failures.length} 条失败`);
+    };
+
+    /** 批量评分所有条目 */
+    const handleBatchScore = async () => {
+        setBatchScoring(true);
+        setFailedIds([]);
+        const entries = filteredEntries;
+        setBatchProgress({ done: 0, total: entries.length });
+        const failures: string[] = [];
+        const CONCURRENCY = 3;
+
+        for (let i = 0; i < entries.length; i += CONCURRENCY) {
+            const batch = entries.slice(i, i + CONCURRENCY);
+            const results = await Promise.allSettled(
+                batch.map((entry) => aiScorePrompt(config, entry.prompt, entry.platform as never)),
+            );
+            results.forEach((result, j) => {
+                const entry = batch[j];
+                if (result.status === "fulfilled") {
+                    setScoreResults((prev) => ({ ...prev, [entry.id]: result.value }));
+                } else {
+                    failures.push(entry.id);
+                }
+            });
+            setBatchProgress({ done: Math.min(i + CONCURRENCY, entries.length), total: entries.length });
+        }
+
+        setBatchScoring(false);
+        setFailedIds(failures);
+        setFailedAction(failures.length > 0 ? "score" : null);
+        message.success(failures.length === 0 ? `已评分 ${entries.length} 条` : `评分完成，${failures.length} 条失败`);
+    };
+
+    /** 重试失败条目（根据失败来源执行对应操作） */
+    const handleRetryFailed = async () => {
+        if (failedIds.length === 0) return;
+        setBatchOptimizing(true);
+        const toRetry = current!.entries.filter((e) => failedIds.includes(e.id));
+        const stillFailed: string[] = [];
+        for (const entry of toRetry) {
+            try {
+                if (failedAction === "score") {
+                    const result = await aiScorePrompt(config, entry.prompt, entry.platform as never);
+                    setScoreResults((prev) => ({ ...prev, [entry.id]: result }));
+                } else {
+                    const result = await aiOptimizePrompt(config, entry.prompt, entry.platform as never);
+                    updateEntry(entry.id, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
+                }
+            } catch {
+                stillFailed.push(entry.id);
+            }
+        }
+        setBatchOptimizing(false);
+        setFailedIds(stillFailed);
+        setFailedAction(stillFailed.length > 0 ? failedAction : null);
+        message.success(stillFailed.length === 0 ? "重试全部成功" : `仍有 ${stillFailed.length} 条失败`);
     };
 
     const handleFeedback = (entryId: string, prompt: string, negativePrompt: string | undefined, platform: string, input: string, styles: { id: string; weight: number }[] | undefined, rating: 1 | -1) => {
@@ -93,19 +202,32 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                 <h3 className="text-sm font-medium text-stone-600 dark:text-stone-300">
                     生成结果 <span className="text-stone-400">（{filteredEntries.length}/{current.entries.length} 条）</span>
                 </h3>
-                <div className="flex flex-wrap gap-1">
-                    <button type="button" onClick={() => setFilterCategory("all")} className={cn("rounded px-2 py-0.5 text-xs transition", filterCategory === "all" ? "bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900" : "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800")}>
-                        全部
-                    </button>
-                    {usedCategories.map((cat) => {
-                        const meta = PROMPT_CATEGORIES.find((c) => c.id === cat);
-                        return (
-                            <button key={cat} type="button" onClick={() => setFilterCategory(cat)} className={cn("rounded px-2 py-0.5 text-xs transition", filterCategory === cat ? "bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900" : "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800")}>
-                                {meta?.label || cat}
-                            </button>
-                        );
-                    })}
+                <div className="flex flex-wrap items-center gap-1">
+                    <Button size="small" icon={batchOptimizing ? <LoaderCircle className="size-3 animate-spin" /> : <Wand2 className="size-3" />} disabled={batchOptimizing || batchScoring} onClick={handleBatchOptimize}>
+                        {batchOptimizing ? `优化中 ${batchProgress.done}/${batchProgress.total}` : "批量优化"}
+                    </Button>
+                    <Button size="small" icon={batchScoring ? <LoaderCircle className="size-3 animate-spin" /> : <Star className="size-3" />} disabled={batchOptimizing || batchScoring} onClick={handleBatchScore}>
+                        {batchScoring ? `评分中 ${batchProgress.done}/${batchProgress.total}` : "批量评分"}
+                    </Button>
+                    {failedIds.length > 0 && (
+                        <Button size="small" danger icon={<RotateCcw className="size-3" />} disabled={batchOptimizing || batchScoring} onClick={handleRetryFailed}>
+                            重试失败（{failedIds.length}）
+                        </Button>
+                    )}
                 </div>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-1">
+                <button type="button" onClick={() => setFilterCategory("all")} className={cn("rounded px-2 py-0.5 text-xs transition", filterCategory === "all" ? "bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900" : "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800")}>
+                    全部
+                </button>
+                {usedCategories.map((cat) => {
+                    const meta = PROMPT_CATEGORIES.find((c) => c.id === cat);
+                    return (
+                        <button key={cat} type="button" onClick={() => setFilterCategory(cat)} className={cn("rounded px-2 py-0.5 text-xs transition", filterCategory === cat ? "bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900" : "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800")}>
+                            {meta?.label || cat}
+                        </button>
+                    );
+                })}
             </div>
             <div className="space-y-3">
                 {filteredEntries.map((entry) => {
@@ -135,16 +257,38 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                         <Button type="text" size="small" icon={scoringId === entry.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Star className="size-3.5" />} disabled={scoringId === entry.id} onClick={() => handleScore(entry.id, entry.prompt, entry.platform)} />
                                     </Tooltip>
                                     <Button type="text" size="small" icon={<Copy className="size-3.5" />} onClick={() => copyText(entry.prompt, "提示词已复制")} />
+                                    {(versionHistory[entry.id]?.length ?? 0) > 0 && (
+                                        <Popover
+                                            title="历史版本"
+                                            trigger="click"
+                                            content={
+                                                <div className="max-h-60 w-72 space-y-2 overflow-y-auto">
+                                                    {versionHistory[entry.id].map((v, i) => (
+                                                        <div key={i} className="rounded border border-stone-200 p-2 dark:border-stone-700">
+                                                            <div className="mb-1 flex items-center justify-between">
+                                                                <span className="text-[10px] text-stone-400">{new Date(v.time).toLocaleTimeString()}</span>
+                                                                <Button type="link" size="small" className="h-auto p-0 text-xs" onClick={() => { updateEntry(entry.id, { prompt: v.prompt, negativePrompt: v.negativePrompt }); message.success("已恢复历史版本"); }}>恢复</Button>
+                                                            </div>
+                                                            <p className="line-clamp-2 text-xs text-stone-500">{v.prompt}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            }
+                                        >
+                                            <Button type="text" size="small" icon={<History className="size-3.5" />} />
+                                        </Popover>
+                                    )}
                                     <Popconfirm title="删除此条目？" onConfirm={() => removeEntry(entry.id)} okText="删除" cancelText="取消">
                                         <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} />
                                     </Popconfirm>
                                 </div>
                             </div>
                             <Input.TextArea
-                                value={entry.prompt}
+                                value={streamingText[entry.id] !== undefined ? streamingText[entry.id] : entry.prompt}
                                 onChange={(e) => updateEntry(entry.id, { prompt: e.target.value })}
                                 autoSize={{ minRows: 2, maxRows: 12 }}
-                                className="font-mono text-xs leading-relaxed"
+                                className={cn("font-mono text-xs leading-relaxed", streamingText[entry.id] !== undefined && "text-blue-600 dark:text-blue-400")}
+                                readOnly={streamingText[entry.id] !== undefined}
                             />
                             {entry.negativePrompt && (
                                 <div className="mt-2">

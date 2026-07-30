@@ -1,9 +1,9 @@
-import { LoaderCircle, Sparkles, Users } from "lucide-react";
+import { LoaderCircle, RefreshCw, Sparkles, Users } from "lucide-react";
 import { useState } from "react";
-import { App, Button, Card, Tag } from "antd";
+import { App, Button, Card, Tag, Tooltip } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
-import { aiGenerateSettings } from "@/services/script-creation-ai";
+import { aiGenerateSettings, aiRegenerateCharacter } from "@/services/script-creation-ai";
 import type { SettingProposal } from "@/types/script-creation";
 import type { AiConfig } from "@/stores/use-config-store";
 import { cn } from "@/lib/utils";
@@ -18,8 +18,9 @@ const ROLE_COLORS: Record<string, string> = {
 
 export function SettingBuilder({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setSettingProposals, confirmSetting, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setSettingProposals, updateCharacterInProposal, confirmSetting, saveCurrent } = useScriptCreationStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [regenCharId, setRegenCharId] = useState<string | null>(null);
 
     if (!current) return null;
 
@@ -48,6 +49,19 @@ export function SettingBuilder({ config }: { config: AiConfig }) {
         }
         confirmSetting(proposal);
         message.success("设定已确认，进入结构搭建！");
+    };
+
+    const handleRegenCharacter = async (proposal: SettingProposal, characterId: string) => {
+        setRegenCharId(characterId);
+        try {
+            const newChar = await aiRegenerateCharacter(config, proposal, characterId);
+            updateCharacterInProposal(proposal.id, characterId, newChar);
+            message.success(`角色已重新生成：${newChar.name}`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "角色重生成失败");
+        } finally {
+            setRegenCharId(null);
+        }
     };
 
     return (
@@ -80,7 +94,7 @@ export function SettingBuilder({ config }: { config: AiConfig }) {
                 <>
                     <div className="space-y-4">
                         {proposals.map((p) => (
-                            <ProposalCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} />
+                            <ProposalCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} regenCharId={regenCharId} onRegenChar={handleRegenCharacter} />
                         ))}
                     </div>
 
@@ -98,7 +112,7 @@ export function SettingBuilder({ config }: { config: AiConfig }) {
     );
 }
 
-function ProposalCard({ proposal, selected, onSelect }: { proposal: SettingProposal; selected: boolean; onSelect: () => void }) {
+function ProposalCard({ proposal, selected, onSelect, regenCharId, onRegenChar }: { proposal: SettingProposal; selected: boolean; onSelect: () => void; regenCharId: string | null; onRegenChar: (p: SettingProposal, charId: string) => void }) {
     return (
         <div
             onClick={onSelect}
@@ -124,6 +138,16 @@ function ProposalCard({ proposal, selected, onSelect }: { proposal: SettingPropo
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">{c.name}</span>
                                 <Tag color={ROLE_COLORS[c.role] ?? "default"} className="m-0 text-[10px]">{c.role}</Tag>
+                                <Tooltip title="重新生成此角色">
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        className="ml-auto h-5 w-5 p-0"
+                                        icon={regenCharId === c.id ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                                        disabled={regenCharId !== null}
+                                        onClick={(e) => { e.stopPropagation(); onRegenChar(proposal, c.id); }}
+                                    />
+                                </Tooltip>
                             </div>
                             <p className="mt-1 text-xs text-stone-500">{c.personality}</p>
                             <p className="mt-0.5 text-xs text-stone-400">动机：{c.motivation}</p>

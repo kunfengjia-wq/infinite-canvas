@@ -1,4 +1,4 @@
-import { Copy, GripVertical, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Copy, GripVertical, LoaderCircle, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Card, Collapse, Input, Popconfirm, Select, Tag } from "antd";
 import { nanoid } from "nanoid";
@@ -135,6 +135,8 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
     const { message } = App.useApp();
     const { current, processing, setProcessing, setSceneShots, confirmShots, saveCurrent } = useStoryboardStore();
     const [generatingScene, setGeneratingScene] = useState<string | null>(null);
+    const [generatingAll, setGeneratingAll] = useState(false);
+    const [allProgress, setAllProgress] = useState({ done: 0, total: 0 });
 
     if (!current) return null;
     const scenes = current.scenes ?? [];
@@ -185,6 +187,55 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
         message.success(`已确认 ${totalShots} 个镜头，进入画面描述`);
     };
 
+    /** 一键生成所有场景镜头 */
+    const handleGenerateAll = async () => {
+        setGeneratingAll(true);
+        setProcessing(true);
+        setAllProgress({ done: 0, total: scenes.length });
+        const assetsCtx = buildAssetsContext(current.assets);
+        const projectMeta = buildProjectMetaContext(current);
+        let successCount = 0;
+
+        for (let i = 0; i < scenes.length; i++) {
+            const scene = scenes[i];
+            if (scene.shots.length > 0) {
+                // 已有镜头的场景跳过
+                setAllProgress({ done: i + 1, total: scenes.length });
+                continue;
+            }
+            try {
+                const scriptForScene = scene.scriptExcerpt || current.script;
+                const results = await aiGenerateShots(config, scene.title, scene.summary, scriptForScene, assetsCtx || undefined, projectMeta || undefined);
+                const shots: Shot[] = results.map((r, idx) => ({
+                    id: nanoid(),
+                    index: idx,
+                    shotType: r.shotType,
+                    angle: r.angle,
+                    action: r.action,
+                    dialogue: r.dialogue || undefined,
+                    duration: r.duration || undefined,
+                    mood: r.mood || undefined,
+                    cameraMovement: r.cameraMovement || undefined,
+                    lens: r.lens || undefined,
+                    lighting: r.lighting || undefined,
+                    composition: r.composition || undefined,
+                    transition: r.transition || undefined,
+                    visualDescription: "",
+                    confirmed: false,
+                }));
+                setSceneShots(scene.id, shots);
+                successCount++;
+            } catch {
+                // 单场景失败不中断
+            }
+            setAllProgress({ done: i + 1, total: scenes.length });
+        }
+
+        setGeneratingAll(false);
+        setProcessing(false);
+        message.success(`已为 ${successCount} 个场景生成镜头`);
+    };
+
     const totalShots = scenes.reduce((sum, s) => sum + s.shots.length, 0);
 
     return (
@@ -194,9 +245,18 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
                     <h2 className="text-lg font-medium">镜头细化</h2>
                     <p className="mt-1 text-sm text-stone-500">为每个场景生成专业分镜（景别/角度/运镜/焦距/光线/转场），拖拽可调整顺序</p>
                 </div>
-                <Button type="primary" size="large" disabled={totalShots === 0} onClick={handleConfirm}>
-                    确认镜头（{totalShots} 个）→ 下一步
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        icon={generatingAll ? <LoaderCircle className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
+                        onClick={handleGenerateAll}
+                        disabled={generatingAll || processing}
+                    >
+                        {generatingAll ? `生成中 ${allProgress.done}/${allProgress.total}` : "一键生成所有场景"}
+                    </Button>
+                    <Button type="primary" size="large" disabled={totalShots === 0} onClick={handleConfirm}>
+                        确认镜头（{totalShots} 个）→ 下一步
+                    </Button>
+                </div>
             </div>
 
             <Collapse
