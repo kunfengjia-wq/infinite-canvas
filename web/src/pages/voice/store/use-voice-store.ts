@@ -111,11 +111,11 @@ async function fetchClonedVoices(): Promise<ClonedVoice[]> {
     }
 }
 
-async function apiCloneVoice(name: string, samples: string[]): Promise<string> {
+async function apiCloneVoice(name: string, samples: string[], refText?: string): Promise<string> {
     const res = await fetch(`${getTtsBase()}/v1/voices/clone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, samples }),
+        body: JSON.stringify({ name, samples, prompt_texts: refText ? [refText] : undefined }),
     });
     if (!res.ok) throw new Error("克隆失败");
     const json = await res.json();
@@ -158,8 +158,15 @@ async function apiApplyEffects(audioB64: string, effects: AudioEffects): Promise
 }
 
 /** 试听音色：用短文本合成并播放 */
-async function previewVoice(engine: string, voice: string): Promise<void> {
-    const blob = await synthesize({ engine, text: "你好，这是音色预览。", voice, speed: 1.0 });
+async function previewVoice(engine: string, voice: string, emotion?: string, emotionIntensity?: number): Promise<void> {
+    const blob = await synthesize({
+        engine,
+        text: "你好，这是音色预览。今天天气真不错。",
+        voice,
+        speed: 1.0,
+        emotion: emotion ?? "neutral",
+        emotionIntensity: emotionIntensity ?? 0.5,
+    });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     audio.onended = () => URL.revokeObjectURL(url);
@@ -175,6 +182,7 @@ interface VoiceStore {
     models: TTSModelInfo[];
     ttsOnline: boolean;
     clonedVoices: ClonedVoice[];
+    generatingLineId: string | null; // 当前正在生成的行 ID
 
     loadProjects: () => Promise<void>;
     loadModels: () => Promise<void>;
@@ -197,19 +205,22 @@ interface VoiceStore {
 
     generateLine: (lineId: string) => Promise<void>;
     generateAll: () => Promise<void>;
-    previewVoice: (engine: string, voice: string) => Promise<void>;
+    previewVoice: (engine: string, voice: string, emotion?: string, emotionIntensity?: number) => Promise<void>;
 
     // 情绪
     setLineEmotion: (lineId: string, emotion: EmotionType, intensity: number) => void;
     batchSetEmotion: (lineIds: string[], emotion: EmotionType, intensity: number) => void;
 
     // 克隆
-    cloneVoice: (name: string, samples: Blob[]) => Promise<string>;
+    cloneVoice: (name: string, samples: Blob[], refText?: string) => Promise<string>;
     deleteClonedVoice: (voiceId: string) => Promise<void>;
 
     // 音频编辑
     trimAudio: (lineId: string, startMs: number, endMs: number) => Promise<void>;
     applyEffects: (lineId: string | "all", effects: AudioEffects) => Promise<void>;
+
+    // 导出
+    exportAll: (format?: string, silenceMs?: number) => Promise<void>;
 }
 
 function now() {
@@ -239,6 +250,7 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     models: [],
     ttsOnline: false,
     clonedVoices: [],
+    generatingLineId: null,
 
     loadProjects: async () => {
         set({ loading: true });
@@ -308,10 +320,16 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     },
 
     addCharacter: (name) => {
-        const { current } = get();
+        const { current, models } = get();
         if (!current) return;
         const color = CHARACTER_COLORS[current.characters.length % CHARACTER_COLORS.length];
-        const char: VoiceCharacter = { id: nanoid(), name, voice: "zf_xiaobei", color, isCloned: false, samples: [] };
+        // 自动分配不同音色
+        const engineModel = models.find((m) => m.id === current.engine);
+        const voices = engineModel?.voices ?? [];
+        const usedVoices = current.characters.map((c) => c.voice);
+        const available = voices.filter((v) => !usedVoices.includes(v.id));
+        const voice = available.length > 0 ? available[0].id : (voices[0]?.id ?? "Vivian");
+        const char: VoiceCharacter = { id: nanoid(), name, voice, color, isCloned: false, samples: [] };
         const updated = { ...current, characters: [...current.characters, char] };
         set({ current: updated });
         void get().saveCurrent();
@@ -405,10 +423,11 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         if (!line) return;
 
         const char = current.characters.find((c) => c.id === line.characterId);
-        const voice = char?.voice ?? "zf_xiaobei";
+        const voice = char?.voice ?? "Vivian";
         const refAudio = char?.referenceAudio;
         const engine = line.engineOverride || current.engine;
 
+        set({ generatingLineId: lineId });
         get().updateLine(lineId, { status: "generating" });
         try {
             const blob = await synthesize({
@@ -430,6 +449,8 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         } catch (e) {
             get().updateLine(lineId, { status: "error" });
             throw e;
+        } finally {
+            set({ generatingLineId: null });
         }
         void get().saveCurrent();
     },
@@ -446,9 +467,9 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         }
     },
 
-    previewVoice: async (engine, voice) => {
+    previewVoice: async (engine, voice, emotion, emotionIntensity) => {
         assertOnline(get);
-        await previewVoice(engine, voice);
+        await previewVoice(engine, voice, emotion, emotionIntensity);
     },
 
     // ─── 情绪 ────────────────────────────────────────────────────
@@ -471,10 +492,10 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
     // ─── 克隆 ────────────────────────────────────────────────────
 
-    cloneVoice: async (name, samples) => {
+    cloneVoice: async (name, samples, refText) => {
         assertOnline(get);
         const samplesB64 = await Promise.all(samples.map(blobToBase64));
-        const voiceId = await apiCloneVoice(name, samplesB64);
+        const voiceId = await apiCloneVoice(name, samplesB64, refText);
         await get().loadVoices();
         return voiceId;
     },
@@ -526,5 +547,44 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
             }
         }
         void get().saveCurrent();
+    },
+
+    // ─── 导出 ────────────────────────────────────────────────────
+
+    exportAll: async (format = "wav", silenceMs = 500) => {
+        const { current } = get();
+        if (!current) return;
+        assertOnline(get);
+
+        const doneLines = current.lines.filter((l) => l.status === "done" && l.audioUrl);
+        if (doneLines.length === 0) throw new Error("没有已生成的音频可导出");
+
+        // 收集所有音频 base64
+        const segments: string[] = [];
+        for (const line of doneLines) {
+            if (line.audioUrl) segments.push(await urlToBase64(line.audioUrl));
+        }
+
+        // 调用后端拼接导出
+        const res = await fetch(`${getTtsBase()}/v1/audio/export`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ segments, silence_ms: silenceMs, format }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: "导出失败" }));
+            throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        // 触发浏览器下载
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${current.title || "配音导出"}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     },
 }));

@@ -11,17 +11,24 @@ interface Props {
 
 export function VoiceConfigPanel({ models }: Props) {
     const { message } = App.useApp();
-    const { current, updateCharacter, previewVoice } = useVoiceStore();
+    const { current, updateCharacter, previewVoice, clonedVoices } = useVoiceStore();
     const [previewingId, setPreviewingId] = useState<string | null>(null);
 
     if (!current) return null;
 
     // 当前引擎的可用音色
     const engineModel = models.find((m) => m.id === current.engine);
-    const voiceOptions = (engineModel?.voices ?? []).map((v) => ({
-        value: v.id,
-        label: `${v.label} (${v.gender === "female" ? "女" : "男"})`,
-    }));
+    const voiceOptions = [
+        ...(engineModel?.voices ?? []).map((v) => ({
+            value: v.id,
+            label: `${v.label} (${v.gender === "female" ? "女" : "男"})`,
+        })),
+        // 克隆音色
+        ...clonedVoices.map((v) => ({
+            value: v.id,
+            label: `${v.name} (克隆)`,
+        })),
+    ];
 
     const handlePreview = async (charId: string, voice: string) => {
         setPreviewingId(charId);

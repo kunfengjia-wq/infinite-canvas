@@ -1,6 +1,6 @@
 /** 语音工作台数据模型 */
 
-export type TTSEngineId = "kokoro-82m" | "xtts-v2" | "qwen3-tts" | "gpt-sovits" | "indextts-2";
+export type TTSEngineId = "kokoro-82m" | "xtts-v2" | "qwen3-tts" | "qwen3-tts-clone" | "gpt-sovits" | "indextts-2";
 
 export type EmotionType = "neutral" | "happy" | "sad" | "angry" | "surprise" | "fear" | "gentle";
 
@@ -76,6 +76,7 @@ export interface TTSModelInfo {
     id: string;
     display_name: string;
     available: boolean;
+    install_hint?: string | null;
     voices: { id: string; label: string; language: string; gender: string }[];
 }
 

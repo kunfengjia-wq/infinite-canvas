@@ -129,6 +129,35 @@ def get_audio_duration_ms(audio_bytes: bytes, format: str = "wav") -> int:
     return len(audio)
 
 
+def concat_audios(audio_segments: list[bytes], silence_ms: int = 500, format: str = "wav") -> bytes:
+    """拼接多段音频，段间插入静音
+
+    Args:
+        audio_segments: 多段音频二进制数据列表
+        silence_ms: 段间静音时长（毫秒）
+        format: 音频格式
+    Returns:
+        拼接后的音频二进制
+    """
+    if AudioSegment is None:
+        raise RuntimeError("pydub 未安装，无法拼接音频")
+    if not audio_segments:
+        raise ValueError("没有音频可拼接")
+
+    result = AudioSegment.empty()
+    silence = AudioSegment.silent(duration=silence_ms)
+
+    for i, seg_bytes in enumerate(audio_segments):
+        seg = AudioSegment.from_file(io.BytesIO(seg_bytes), format=format)
+        if i > 0:
+            result += silence
+        result += seg
+
+    out = io.BytesIO()
+    result.export(out, format=format)
+    return out.getvalue()
+
+
 def get_waveform_data(audio_bytes: bytes, points: int = 200, format: str = "wav") -> list[float]:
     """提取波形数据用于前端渲染（归一化到 -1 ~ 1）"""
     if AudioSegment is None:

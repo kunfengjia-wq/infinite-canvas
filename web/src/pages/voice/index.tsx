@@ -1,6 +1,6 @@
-import { AudioLines, LoaderCircle, Plus, Volume2, WifiOff } from "lucide-react";
+import { AudioLines, Download, LoaderCircle, Plus, Volume2, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Empty, Select, Tabs } from "antd";
+import { App, Button, Empty, Select, Tabs } from "antd";
 
 import { useVoiceStore } from "./store/use-voice-store";
 import { useConfigStore } from "@/stores/use-config-store";
@@ -16,9 +16,11 @@ import { AudioTrimmer } from "./components/audio-trimmer";
 import type { TTSEngineId } from "./types";
 
 export default function VoicePage() {
+    const { message } = App.useApp();
     const { current, models, ttsOnline, loadProjects, loadModels, generateAll, startPolling, stopPolling } = useVoiceStore();
     const ttsBaseUrl = useConfigStore((s) => s.config.ttsBaseUrl);
     const [generatingAll, setGeneratingAll] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const [trimLineId, setTrimLineId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -35,6 +37,18 @@ export default function VoicePage() {
             await generateAll();
         } catch { /* store 内部已处理 */ }
         setGeneratingAll(false);
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            await useVoiceStore.getState().exportAll("wav", 500);
+            message.success("导出成功");
+        } catch (e) {
+            message.error(e instanceof Error ? e.message : "导出失败");
+        } finally {
+            setExporting(false);
+        }
     };
 
     const doneCount = current?.lines.filter((l) => l.status === "done").length ?? 0;
@@ -67,8 +81,13 @@ export default function VoicePage() {
                                     useVoiceStore.setState({ current: updated });
                                     void useVoiceStore.getState().saveCurrent();
                                 }}
-                                className="w-36"
-                                options={models.map((m) => ({ value: m.id, label: m.display_name }))}
+                                className="w-40"
+                                options={models.map((m) => ({
+                                    value: m.id,
+                                    label: m.available ? m.display_name : `${m.display_name} (未安装)`,
+                                    disabled: !m.available,
+                                    title: m.install_hint ?? undefined,
+                                }))}
                                 placeholder="选择引擎"
                             />
                         )}
@@ -82,6 +101,17 @@ export default function VoicePage() {
                                 disabled={generatingAll}
                             >
                                 {generatingAll ? `生成中 ${doneCount}/${totalCount}` : `全部生成 (${doneCount}/${totalCount})`}
+                            </Button>
+                        )}
+
+                        {current && doneCount > 0 && (
+                            <Button
+                                size="small"
+                                icon={exporting ? <LoaderCircle className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                                onClick={handleExport}
+                                disabled={exporting}
+                            >
+                                导出
                             </Button>
                         )}
                     </div>

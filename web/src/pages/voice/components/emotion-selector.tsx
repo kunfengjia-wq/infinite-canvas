@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Slider, Tooltip } from "antd";
+import { Play, LoaderCircle } from "lucide-react";
 
 import { EMOTION_OPTIONS, type EmotionType } from "../types";
 import { useVoiceStore } from "../store/use-voice-store";
@@ -63,14 +64,25 @@ export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; e
 
 /** 批量情绪设置面板（右栏 Tab 中使用） */
 export function EmotionBatchPanel() {
-    const { current, batchSetEmotion } = useVoiceStore();
+    const { current, batchSetEmotion, previewVoice } = useVoiceStore();
     const [emotion, setEmotion] = useState<EmotionType>("neutral");
     const [intensity, setIntensity] = useState(50);
+    const [previewing, setPreviewing] = useState(false);
 
     if (!current) return null;
 
     const allLineIds = current.lines.map((l) => l.id);
     const doneCount = current.lines.filter((l) => l.status === "done").length;
+
+    const handlePreviewEmotion = async () => {
+        setPreviewing(true);
+        try {
+            const firstChar = current.characters[0];
+            const voice = firstChar?.voice ?? "Vivian";
+            await previewVoice(current.engine, voice, emotion, intensity / 100);
+        } catch { /* ignore */ }
+        setPreviewing(false);
+    };
 
     return (
         <div className="space-y-4 p-3">
@@ -106,15 +118,24 @@ export function EmotionBatchPanel() {
             </div>
 
             {/* 应用 */}
-            <Button
-                type="primary"
-                block
-                size="small"
-                disabled={allLineIds.length === 0}
-                onClick={() => batchSetEmotion(allLineIds, emotion, intensity / 100)}
-            >
-                应用到全部台词
-            </Button>
+            <div className="flex gap-2">
+                <Button
+                    type="primary"
+                    block
+                    size="small"
+                    disabled={allLineIds.length === 0}
+                    onClick={() => batchSetEmotion(allLineIds, emotion, intensity / 100)}
+                >
+                    应用到全部台词
+                </Button>
+                <Button
+                    size="small"
+                    icon={previewing ? <LoaderCircle className="size-3 animate-spin" /> : <Play className="size-3" />}
+                    disabled={previewing}
+                    onClick={() => void handlePreviewEmotion()}
+                    title="试听情绪效果"
+                />
+            </div>
         </div>
     );
 }

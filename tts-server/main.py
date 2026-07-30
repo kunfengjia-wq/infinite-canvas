@@ -14,6 +14,7 @@ from engines.base import SynthesisRequest
 from engines.kokoro_engine import KokoroEngine
 from engines.xtts_engine import XTTSEngine
 from engines.qwen_engine import QwenTTSEngine
+from engines.qwen_clone_engine import QwenCloneEngine
 from engines.gptsovits_engine import GPTSoVITSEngine
 from engines.indextts_engine import IndexTTSEngine
 import audio_utils
@@ -30,9 +31,12 @@ app.add_middleware(
 
 # 注册引擎
 ENGINES = {}
-for engine_cls in [KokoroEngine, XTTSEngine, QwenTTSEngine, GPTSoVITSEngine, IndexTTSEngine]:
+for engine_cls in [KokoroEngine, XTTSEngine, QwenTTSEngine, QwenCloneEngine, GPTSoVITSEngine, IndexTTSEngine]:
     engine = engine_cls()
     ENGINES[engine.engine_id] = engine
+
+# 克隆引擎引用（用于克隆管理端点）
+CLONE_ENGINE: QwenCloneEngine = ENGINES["qwen3-tts-clone"]  # type: ignore
 
 
 # ─── 请求模型 ────────────────────────────────────────────────────
@@ -55,17 +59,30 @@ class SpeechRequest(BaseModel):
 
 # ─── API 端点 ────────────────────────────────────────────────────
 
+# 引擎安装提示
+INSTALL_HINTS = {
+    "kokoro-82m": "pip install kokoro-onnx",
+    "xtts-v2": "pip install TTS && tts-server 下载 XTTS-v2 模型",
+    "qwen3-tts": "pip install qwen-tts && 下载 Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "qwen3-tts-clone": "下载 Qwen3-TTS-12Hz-1.7B-Base 模型",
+    "gpt-sovits": "pip install GPT-SoVITS && 下载模型",
+    "indextts-2": "pip install indextts && 下载 Index-TTS-2 模型",
+}
+
+
 @app.get("/v1/models")
 async def list_models():
     """列出可用引擎及其音色"""
     models = []
     for eid, engine in ENGINES.items():
+        avail = engine.is_available()
         models.append({
             "id": eid,
             "object": "model",
             "owned_by": "local",
             "display_name": engine.display_name,
-            "available": engine.is_available(),
+            "available": avail,
+            "install_hint": None if avail else INSTALL_HINTS.get(eid, ""),
             "voices": [
                 {"id": v.id, "label": v.label, "language": v.language, "gender": v.gender}
                 for v in engine.list_voices()
@@ -159,6 +176,16 @@ async def clone_voice(req: CloneVoiceRequest):
     if not req.samples:
         raise HTTPException(status_code=400, detail="至少需要一段参考音频")
 
+    # 优先使用 Qwen3-TTS 克隆引擎
+    if CLONE_ENGINE.is_available():
+        try:
+            ref_text = req.prompt_texts[0] if req.prompt_texts else None
+            voice_id = CLONE_ENGINE.clone_voice(req.name, req.samples, ref_text)
+            return {"id": f"clone_{voice_id}", "name": req.name, "samples_count": len(req.samples)}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"克隆失败: {str(e)}")
+
+    # Fallback: 简单文件存储（无 GPU 时）
     voice_id = f"clone_{req.name}_{len(list(VOICES_DIR.iterdir()))}"
     voice_dir = VOICES_DIR / voice_id
     voice_dir.mkdir(parents=True, exist_ok=True)
@@ -167,7 +194,6 @@ async def clone_voice(req: CloneVoiceRequest):
         audio_data = base64.b64decode(sample_b64)
         (voice_dir / f"sample_{i}.wav").write_bytes(audio_data)
 
-    # 保存元数据
     meta = {"name": req.name, "prompt_texts": req.prompt_texts or []}
     (voice_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
 
@@ -178,6 +204,12 @@ async def clone_voice(req: CloneVoiceRequest):
 async def list_voices():
     """列出所有克隆音色"""
     voices = []
+
+    # 从 Qwen 克隆引擎获取
+    if CLONE_ENGINE.is_available():
+        voices.extend(CLONE_ENGINE.list_cloned_voices())
+
+    # 从文件目录获取（fallback 存储的）
     for voice_dir in VOICES_DIR.iterdir():
         if not voice_dir.is_dir():
             continue
@@ -197,10 +229,16 @@ async def list_voices():
 async def delete_voice(voice_id: str):
     """删除克隆音色"""
     import shutil
+
+    # 尝试从 Qwen 克隆引擎删除
+    if CLONE_ENGINE.is_available():
+        CLONE_ENGINE.delete_voice(voice_id)
+
+    # 尝试从文件目录删除
     voice_dir = VOICES_DIR / voice_id
-    if not voice_dir.exists():
-        raise HTTPException(status_code=404, detail="音色不存在")
-    shutil.rmtree(voice_dir)
+    if voice_dir.exists():
+        shutil.rmtree(voice_dir)
+
     return {"deleted": voice_id}
 
 
@@ -301,6 +339,28 @@ async def get_waveform(req: TrimRequest):
         points = audio_utils.get_waveform_data(audio_bytes, points=200, format=req.format)
         duration = audio_utils.get_audio_duration_ms(audio_bytes, req.format)
         return {"waveform": points, "duration_ms": duration}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class ExportRequest(BaseModel):
+    segments: list[str] = Field(..., description="base64 音频列表（按顺序拼接）")
+    silence_ms: int = Field(default=500, ge=0, le=5000, description="段间静音(ms)")
+    format: str = Field(default="wav", description="输出格式: wav/mp3")
+
+
+@app.post("/v1/audio/export")
+async def export_audio(req: ExportRequest):
+    """拼接多段音频并导出"""
+    try:
+        segments = [base64.b64decode(s) for s in req.segments]
+        result = audio_utils.concat_audios(segments, silence_ms=req.silence_ms, format=req.format)
+        mime = "audio/wav" if req.format == "wav" else "audio/mpeg"
+        return Response(
+            content=result,
+            media_type=mime,
+            headers={"Content-Disposition": f'attachment; filename="export.{req.format}"'},
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

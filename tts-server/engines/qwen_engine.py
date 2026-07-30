@@ -1,4 +1,4 @@
-"""Qwen3-TTS 引擎 - 使用官方 qwen-tts 包，支持 9 种音色 + 10 种语言"""
+"""Qwen3-TTS 引擎 - 使用官方 qwen-tts 包，支持 9 种音色 + 10 种语言 + 情绪控制"""
 import io
 import asyncio
 from functools import partial
@@ -27,6 +27,45 @@ _VOICE_LANG = {
     "Ryan": "English", "Aiden": "English",
     "Ono_Anna": "Japanese", "Sohee": "Korean",
 }
+
+# 情绪 -> instruct 自然语言指令
+EMOTION_INSTRUCT = {
+    "neutral": "",
+    "happy": "用开心愉快的语气说",
+    "sad": "用悲伤低沉的语气说",
+    "angry": "用愤怒激动的语气说",
+    "surprise": "用惊讶意外的语气说",
+    "fear": "用害怕紧张的语气说",
+    "gentle": "用温柔轻柔的语气说",
+}
+
+
+def _build_instruct(emotion: str, intensity: float, speed: float) -> str | None:
+    """将情绪/强度/语速合成为 instruct 指令字符串"""
+    parts: list[str] = []
+
+    # 情绪部分
+    emo_text = EMOTION_INSTRUCT.get(emotion, "")
+    if emo_text:
+        if intensity > 0.7:
+            emo_text += "，语气强烈"
+        elif intensity < 0.3:
+            emo_text += "，语气轻微"
+        parts.append(emo_text)
+
+    # 语速部分
+    if speed >= 1.3:
+        parts.append("语速较快")
+    elif speed >= 1.1:
+        parts.append("语速稍快")
+    elif speed <= 0.7:
+        parts.append("语速很慢")
+    elif speed <= 0.9:
+        parts.append("语速稍慢")
+
+    if not parts:
+        return None
+    return "，".join(parts)
 
 
 class QwenTTSEngine(TTSEngine):
@@ -88,12 +127,14 @@ class QwenTTSEngine(TTSEngine):
         voice = req.voice if req.voice in _VOICE_LANG else "Vivian"
         language = _VOICE_LANG[voice]
 
+        # 构建 instruct 指令（情绪 + 语速）
+        instruct = _build_instruct(req.emotion, req.emotion_intensity, req.speed)
+
         # 调用官方 API
-        wavs, sr = self._model.generate_custom_voice(
-            text=req.text,
-            speaker=voice,
-            language=language,
-        )
+        kwargs = dict(text=req.text, speaker=voice, language=language)
+        if instruct:
+            kwargs["instruct"] = instruct
+        wavs, sr = self._model.generate_custom_voice(**kwargs)
 
         # 编码输出
         buf = io.BytesIO()

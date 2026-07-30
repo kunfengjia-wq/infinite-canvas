@@ -23,3 +23,5 @@ __pycache__/
 tts-server/test_output.wav
 tts-server/*.log
 tts-server/downloads/
+tts-server/voices/
+tts-server/models/

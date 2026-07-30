@@ -35,9 +35,12 @@ class KokoroEngine(TTSEngine):
     def is_available(self) -> bool:
         try:
             import kokoro_onnx  # noqa: F401
-            return True
         except ImportError:
             return False
+        # 检查模型文件是否存在
+        import os
+        model_path = os.path.join(os.path.dirname(__file__), "..", "models", "kokoro-v1.0.onnx")
+        return os.path.exists(model_path)
 
     def _ensure_model(self):
         if self._model is not None:

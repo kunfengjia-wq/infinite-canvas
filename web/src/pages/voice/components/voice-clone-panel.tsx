@@ -8,6 +8,7 @@ export function VoiceClonePanel() {
     const { message } = App.useApp();
     const { clonedVoices, loadVoices, cloneVoice, deleteClonedVoice } = useVoiceStore();
     const [name, setName] = useState("");
+    const [refText, setRefText] = useState("");
     const [samples, setSamples] = useState<Blob[]>([]);
     const [cloning, setCloning] = useState(false);
     const [recording, setRecording] = useState(false);
@@ -52,12 +53,13 @@ export function VoiceClonePanel() {
     // 克隆
     const handleClone = async () => {
         if (!name.trim()) { message.warning("请输入音色名称"); return; }
-        if (samples.length === 0) { message.warning("请至少添加一段参考音频"); return; }
+        if (samples.length === 0) { message.warning("请至少添加一段参考音频（3-10秒）"); return; }
         setCloning(true);
         try {
-            await cloneVoice(name.trim(), samples);
-            message.success("音色克隆成功！");
+            await cloneVoice(name.trim(), samples, refText.trim() || undefined);
+            message.success("音色克隆成功！在角色面板中选择该音色即可使用");
             setName("");
+            setRefText("");
             setSamples([]);
         } catch (e) {
             message.error(e instanceof Error ? e.message : "克隆失败");
@@ -79,6 +81,17 @@ export function VoiceClonePanel() {
                     onChange={(e) => setName(e.target.value)}
                     className="mb-2"
                 />
+
+                {/* 参考文本（可选，提升克隆质量） */}
+                <Input.TextArea
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="参考音频对应文本（可选，提升克隆质量）"
+                    value={refText}
+                    onChange={(e) => setRefText(e.target.value)}
+                    className="mb-2 !text-xs"
+                />
+
+                <p className="mb-2 text-[10px] text-stone-400">提示：上传 3-10 秒清晰人声效果最佳</p>
 
                 {/* 样本列表 */}
                 {samples.length > 0 && (

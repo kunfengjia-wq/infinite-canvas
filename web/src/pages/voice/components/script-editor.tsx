@@ -4,6 +4,7 @@ import { App, Button, Input, Select, Tooltip } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
 import { EmotionBadge } from "./emotion-selector";
+import { cn } from "@/lib/utils";
 import type { VoiceLineStatus } from "../types";
 
 const STATUS_ICON: Record<VoiceLineStatus, React.ReactNode> = {
@@ -15,7 +16,7 @@ const STATUS_ICON: Record<VoiceLineStatus, React.ReactNode> = {
 
 export function ScriptEditor() {
     const { message } = App.useApp();
-    const { current, addLine, updateLine, removeLine, generateLine, parseScript } = useVoiceStore();
+    const { current, addLine, updateLine, removeLine, generateLine, parseScript, generatingLineId } = useVoiceStore();
     const [newText, setNewText] = useState("");
     const [newCharId, setNewCharId] = useState<string>("");
     const [importText, setImportText] = useState("");
@@ -107,7 +108,14 @@ export function ScriptEditor() {
                 {current.lines.map((line, idx) => (
                     <div
                         key={line.id}
-                        className="group flex items-start gap-2 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-stone-200 hover:bg-stone-50 dark:hover:border-stone-700 dark:hover:bg-stone-800/40"
+                        className={cn(
+                            "group flex items-start gap-2 rounded-lg border px-3 py-2 transition-colors",
+                            generatingLineId === line.id
+                                ? "border-violet-300 bg-violet-50/60 dark:border-violet-700 dark:bg-violet-900/20"
+                                : line.status === "error"
+                                    ? "border-red-200 bg-red-50/40 hover:border-red-300 dark:border-red-900/50 dark:bg-red-950/20"
+                                    : "border-transparent hover:border-stone-200 hover:bg-stone-50 dark:hover:border-stone-700 dark:hover:bg-stone-800/40",
+                        )}
                     >
                         {/* 序号 + 状态 */}
                         <div className="flex flex-col items-center gap-1 pt-0.5">
