@@ -597,6 +597,106 @@ async function requestImageViaDashScope(config: AiConfig, prompt: string, size?:
     return urls.map((dataUrl) => ({ id: nanoid(), dataUrl }));
 }
 
+/** 百炼 DashScope 原生文生图 API（万相/千问/z-image 系列） */
+async function requestDashScopeNativeImage(config: AiConfig, prompt: string, n: number, size: string | undefined, options?: RequestOptions) {
+    const origin = extractDashScopeOrigin(config.baseUrl);
+    const model = config.model.toLowerCase();
+    // 千问文生图走 multimodal-generation，万相/z-image 走 image-generation
+    const isQwenImage = model.startsWith("qwen-image") || model.startsWith("qwen-vl");
+    const servicePath = isQwenImage
+        ? "/api/v1/services/aigc/multimodal-generation/generation"
+        : "/api/v1/services/aigc/image-generation/generation";
+    const url = dashScopeNativeUrl(origin, servicePath);
+    // 百炼 size 格式："宽*高" 或缩写 "1K"/"2K"/"4K"
+    const dashScopeSize = size ? size.replace("x", "*") : undefined;
+    const body: Record<string, unknown> = {
+        model: config.model,
+        input: {
+            messages: [{ role: "user", content: [{ text: withSystemPrompt(config, prompt) }] }],
+        },
+        parameters: {
+            n,
+            ...(dashScopeSize ? { size: dashScopeSize } : {}),
+        },
+    };
+    const response = await axios.post(url, body, {
+        headers: { ...aiHeaders(config, "application/json") },
+        signal: options?.signal,
+        timeout: 120_000,
+    });
+    const payload = response.data as Record<string, unknown>;
+    // 检查业务错误
+    if (payload.code && payload.code !== "" && payload.code !== "200" && payload.code !== 0) {
+        throw new Error(String(payload.message || payload.code));
+    }
+    const output = payload.output as Record<string, unknown> | undefined;
+    if (!output) throw new Error("百炼接口未返回 output 字段");
+    // 异步任务：需要轮询
+    if (output.task_id && output.task_status && output.task_status !== "SUCCEEDED") {
+        return await pollDashScopeTask(origin, String(output.task_id), config, options);
+    }
+    // 同步结果
+    const images = parseDashScopeImageOutput(output);
+    if (!images.length) throw new Error("百炼生图模型未返回图片，请检查提示词是否触发安全审核");
+    return images;
+}
+
+async function pollDashScopeTask(origin: string, taskId: string, config: AiConfig, options?: RequestOptions) {
+    const url = dashScopeNativeUrl(origin, `/api/v1/tasks/${taskId}`);
+    const maxAttempts = 40; // 最多等 2 分钟（每 3 秒一次）
+    for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (options?.signal?.aborted) throw new Error("请求已取消");
+        const response = await axios.get(url, { headers: aiHeaders(config), signal: options?.signal });
+        const payload = response.data as Record<string, unknown>;
+        const output = payload.output as Record<string, unknown> | undefined;
+        if (!output) continue;
+        const status = String(output.task_status || "");
+        if (status === "SUCCEEDED") {
+            const images = parseDashScopeImageOutput(output);
+            if (!images.length) throw new Error("百炼生图任务完成但未返回图片");
+            return images;
+        }
+        if (status === "FAILED" || status === "UNKNOWN") {
+            throw new Error(String(output.message || output.code || "百炼生图任务失败"));
+        }
+    }
+    throw new Error("百炼生图任务超时（2分钟），请稍后重试");
+}
+
+function parseDashScopeImageOutput(output: Record<string, unknown>) {
+    const choices = output.choices as Array<{ message?: { content?: unknown } }> | undefined;
+    if (choices?.length) {
+        const content = choices[0]?.message?.content;
+        const urls = extractImageUrls(content);
+        return urls.map((dataUrl) => ({ id: nanoid(), dataUrl }));
+    }
+    // 旧版格式：output.results[].url
+    const results = output.results as Array<{ url?: string }> | undefined;
+    if (results?.length) {
+        return results.filter((r) => r.url).map((r) => ({ id: nanoid(), dataUrl: r.url! }));
+    }
+    return [];
+}
+
+/** 从 baseUrl 提取百炼域名（去掉 /compatible-mode 等路径） */
+function extractDashScopeOrigin(baseUrl: string) {
+    try {
+        const url = new URL(baseUrl);
+        return url.origin;
+    } catch {
+        return baseUrl.replace(/\/compatible-mode.*$/i, "").replace(/\/+$/, "");
+    }
+}
+
+/** 构建百炼原生 API URL（dev 模式走 vite 代理） */
+function dashScopeNativeUrl(origin: string, path: string) {
+    if (import.meta.env.DEV) {
+        return `/ai-cors-proxy-dashscope-native${path}`;
+    }
+    return `${origin}${path}`;
+}
+
 function extractImageUrls(content: unknown): string[] {
     if (!content) return [];
     if (typeof content === "string") {
@@ -834,6 +934,16 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     if (requestConfig.apiFormat === "gemini") {
         try {
             return await requestGeminiImages(requestConfig, prompt, [], n, options);
+        } catch (error) {
+            throw new Error(readAxiosError(error, "请求失败"));
+        }
+    }
+    // 百炼：走 DashScope 原生文生图 API
+    if (requestConfig.apiFormat === "dashscope") {
+        const quality = normalizeQuality(config.quality);
+        const requestSize = resolveRequestSize(quality, config.size);
+        try {
+            return await requestDashScopeNativeImage(requestConfig, prompt, n, requestSize, options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
         }

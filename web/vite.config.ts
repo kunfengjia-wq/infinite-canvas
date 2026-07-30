@@ -77,6 +77,12 @@ export default defineConfig({
     server: {
         proxy: {
             // 开发环境代理：解决 AI API 的 CORS 限制
+            "/ai-cors-proxy-dashscope-native": {
+                target: "https://dashscope.aliyuncs.com",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/ai-cors-proxy-dashscope-native/, ""),
+            },
             "/ai-cors-proxy-dashscope": {
                 target: "https://dashscope.aliyuncs.com",
                 changeOrigin: true,
