@@ -38,6 +38,8 @@ export type AiConfig = {
     audioFormat: string;
     audioSpeed: string;
     audioInstructions: string;
+    ttsBaseUrl: string;
+    ttsEngine: string;
     videoSeconds: string;
     vquality: string;
     videoGenerateAudio: string;
@@ -65,7 +67,7 @@ export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
-const DASHSCOPE_BASE_URL = import.meta.env.VITE_DASHSCOPE_BASE_URL || "https://ws-ej37wfihrpgy74sf.cn-beijing.maas.aliyuncs.com/compatible-mode";
+const DASHSCOPE_BASE_URL = import.meta.env.VITE_DASHSCOPE_BASE_URL || "";
 const DASHSCOPE_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY || "";
 const ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 const DASHSCOPE_PUBLIC_URL = "https://dashscope.aliyuncs.com/compatible-mode";
@@ -98,6 +100,8 @@ export const defaultConfig: AiConfig = {
     audioFormat: "mp3",
     audioSpeed: "1",
     audioInstructions: "",
+    ttsBaseUrl: "http://localhost:8880",
+    ttsEngine: "kokoro-82m",
     videoSeconds: "6",
     vquality: "720",
     videoGenerateAudio: "true",

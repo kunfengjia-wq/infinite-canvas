@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { audioFormatOptions, audioSpeedLabel, audioVoiceOptions, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
@@ -7,7 +7,7 @@ import type { AiConfig } from "@/stores/use-config-store";
 
 const speedOptions = ["0.75", "1", "1.25", "1.5"];
 
-type AudioSettingKey = "audioVoice" | "audioFormat" | "audioSpeed" | "audioInstructions";
+type AudioSettingKey = "audioVoice" | "audioFormat" | "audioSpeed" | "audioInstructions" | "ttsBaseUrl" | "ttsEngine";
 
 type AudioSettingsPanelProps = {
     config: AiConfig;
@@ -75,6 +75,7 @@ export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         onMouseDown={(event) => event.stopPropagation()}
                     />
                 </SettingGroup>
+                <LocalTtsSection config={config} onConfigChange={onConfigChange} theme={theme} />
             </div>
         </ImageSettingsTheme>
     );
@@ -96,5 +97,57 @@ function SettingGroup({ title, color, children }: { title: string; color: string
             </div>
             {children}
         </div>
+    );
+}
+
+/** 本地 TTS 引擎配置区域 */
+function LocalTtsSection({ config, onConfigChange, theme }: { config: AiConfig; onConfigChange: (key: AudioSettingKey, value: string) => void; theme: CanvasTheme }) {
+    const [engines, setEngines] = useState<{ id: string; display_name: string; available: boolean }[]>([]);
+    const [online, setOnline] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const base = config.ttsBaseUrl || "http://localhost:8880";
+        fetch(`${base}/v1/models`)
+            .then((res) => (res.ok ? res.json() : Promise.reject()))
+            .then((json) => {
+                if (cancelled) return;
+                setEngines((json.data ?? []).map((m: { id: string; display_name: string; available: boolean }) => ({ id: m.id, display_name: m.display_name, available: m.available })));
+                setOnline(true);
+            })
+            .catch(() => { if (!cancelled) setOnline(false); });
+        return () => { cancelled = true; };
+    }, [config.ttsBaseUrl]);
+
+    return (
+        <SettingGroup title="本地 TTS 服务" color={theme.node.muted}>
+            {/* 服务状态 */}
+            <div className="flex items-center gap-2 text-xs" style={{ color: online ? "#10b981" : theme.node.muted }}>
+                <span className="inline-block size-2 rounded-full" style={{ background: online ? "#10b981" : theme.node.stroke }} />
+                {online ? "已连接" : "离线"}
+            </div>
+
+            {/* Base URL */}
+            <input
+                type="text"
+                className="h-9 w-full rounded-full border bg-transparent px-3 text-sm outline-none"
+                style={{ borderColor: theme.node.stroke, color: theme.node.text, WebkitTextFillColor: theme.node.text }}
+                value={config.ttsBaseUrl || "http://localhost:8880"}
+                placeholder="http://localhost:8880"
+                onChange={(e) => onConfigChange("ttsBaseUrl", e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+            />
+
+            {/* 引擎选择 */}
+            {engines.length > 0 && (
+                <div className="grid grid-cols-3 gap-2.5">
+                    {engines.map((eng) => (
+                        <OptionPill key={eng.id} selected={config.ttsEngine === eng.id} theme={theme} onClick={() => onConfigChange("ttsEngine", eng.id)}>
+                            {eng.display_name}
+                        </OptionPill>
+                    ))}
+                </div>
+            )}
+        </SettingGroup>
     );
 }

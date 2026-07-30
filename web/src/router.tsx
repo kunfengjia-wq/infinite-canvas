@@ -13,6 +13,7 @@ import PromptsPage from "@/pages/prompts";
 import ScriptCreationPage from "@/pages/script-creation";
 import StoryboardPage from "@/pages/storyboard";
 import VideoPage from "@/pages/video";
+import VoicePage from "@/pages/voice";
 
 export const router = createBrowserRouter([
     {
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
             { path: "/script", element: <ScriptCreationPage /> },
             { path: "/canvas", element: <CanvasPage /> },
             { path: "/canvas/:id", element: <CanvasProjectPage /> },
+            { path: "/voice", element: <VoicePage /> },
             { path: "/config", element: <ConfigPage /> },
         ],
     },

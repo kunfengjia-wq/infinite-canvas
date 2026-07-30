@@ -1,10 +1,11 @@
-import { ArrowRight, CheckCircle2, ClipboardCopy, FileText, LoaderCircle, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight, AudioLines, CheckCircle2, ClipboardCopy, FileText, LoaderCircle, ShieldCheck, Wrench } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Checkbox, Divider } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useVoiceStore } from "@/pages/voice/store/use-voice-store";
 import { aiConsistencyCheck, aiFixConsistencyIssues } from "@/services/script-creation-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -15,6 +16,7 @@ export function FinalOutput({ config }: { config: AiConfig }) {
     const [checking, setChecking] = useState(false);
     const [fixing, setFixing] = useState(false);
     const [transferring, setTransferring] = useState(false);
+    const [toVoice, setToVoice] = useState(false);
     const [selectedSegments, setSelectedSegments] = useState<Set<string>>(new Set());
     const [showChapterSelect, setShowChapterSelect] = useState(false);
 
@@ -109,6 +111,22 @@ export function FinalOutput({ config }: { config: AiConfig }) {
         }
     };
 
+    /** 配音朗读：导入剧本到语音工作台 */
+    const handleToVoice = async () => {
+        setToVoice(true);
+        try {
+            const voiceStore = useVoiceStore.getState();
+            await voiceStore.createProject(`${current.title} - 配音`, "kokoro-82m");
+            voiceStore.parseScript(current.fullScript);
+            message.success("已导入到语音工作台");
+            navigate("/voice");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导入失败");
+        } finally {
+            setToVoice(false);
+        }
+    };
+
     const wordCount = current.fullScript.length;
 
     return (
@@ -124,6 +142,9 @@ export function FinalOutput({ config }: { config: AiConfig }) {
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <Button icon={<AudioLines className="size-4" />} onClick={handleToVoice} disabled={toVoice}>
+                        {toVoice ? "导入中…" : "配音朗读"}
+                    </Button>
                     <Button icon={<ClipboardCopy className="size-4" />} onClick={handleCopy}>
                         复制全文
                     </Button>
