@@ -306,14 +306,18 @@ async def get_waveform(req: TrimRequest):
 
 
 if __name__ == "__main__":
+    import sys
     import uvicorn
+    # Windows 重定向输出时避免 GBK 编码崩溃
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     print("=" * 50)
     print("  Local TTS Server")
     print("  http://localhost:8880")
-    print("  OpenAI 兼容: POST /v1/audio/speech")
+    print("  OpenAI compatible: POST /v1/audio/speech")
     print("=" * 50)
     for eid, engine in ENGINES.items():
-        avail = "✓" if engine.is_available() else "✗ (未安装)"
+        avail = "OK" if engine.is_available() else "X (not installed)"
         print(f"  [{avail}] {engine.display_name} ({eid})")
     print("=" * 50)
     uvicorn.run(app, host="0.0.0.0", port=8880)

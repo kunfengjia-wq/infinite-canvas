@@ -79,7 +79,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     // 动画类
     { id: "anime", label: "日系动漫", keywords: "anime style, cel shading, vibrant colors, detailed eyes, clean lines, manga inspired", category: "动画类", mediaType: "both" },
     { id: "western_comics", label: "美漫", keywords: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel", category: "动画类", mediaType: "both" },
-    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing", category: "动画类", mediaType: "both" },
+    { id: "3dcg", label: "3DCG", keywords: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing, global illumination, subsurface scattering, clean topology, smooth geometry, digital sculpture, 3D modeling", category: "动画类", mediaType: "both" },
     { id: "stop_motion", label: "定格动画", keywords: "stop motion, claymation, miniature, handcrafted, tactile, laika studios", category: "动画类", mediaType: "both" },
     { id: "ink_animation", label: "水墨动画", keywords: "chinese ink animation, brush strokes, flowing ink, traditional animation, ethereal movement", category: "动画类", mediaType: "both" },
     { id: "pixel_art", label: "像素艺术", keywords: "pixel art, 8-bit, 16-bit, retro game, sprite, nostalgic gaming", category: "动画类", mediaType: "both" },
@@ -122,6 +122,28 @@ export const STYLE_PRESETS: StylePreset[] = [
     { id: "retro_poster", label: "复古海报", keywords: "vintage poster, WPA style, bold typography, limited palette, propaganda art, travel poster", category: "现代设计", mediaType: "image" },
     // 科幻/奇幻补充
     { id: "horror", label: "恐怖惊悚", keywords: "horror aesthetic, unsettling, dark atmosphere, jump scare tension, eerie lighting, psychological dread", category: "科幻/奇幻", mediaType: "both" },
+    { id: "mecha", label: "机甲", keywords: "mecha, mechanical armor, futuristic suit, industrial design, metal panels, hydraulic, glowing cockpit", category: "科幻/奇幻", mediaType: "both" },
+    { id: "xianxia", label: "仙侠", keywords: "xianxia, flowing robes, celestial, jade ornaments, mystical aura, floating mountains, chinese mythology", category: "科幻/奇幻", mediaType: "both" },
+    { id: "lovecraftian", label: "克苏鲁", keywords: "lovecraftian, eldritch, tentacles, cosmic dread, non-euclidean, ancient ones, maddening", category: "科幻/奇幻", mediaType: "both" },
+    // 影视写实补充
+    { id: "film_noir", label: "黑色电影", keywords: "film noir, high contrast, dramatic shadows, venetian blind lighting, 1940s, chiaroscuro, black and white", category: "写实类", mediaType: "both" },
+    { id: "music_video", label: "音乐MV", keywords: "music video, dynamic lighting, stylized, performance, dramatic, high energy, concert", category: "写实类", mediaType: "video" },
+    // 动画类补充
+    { id: "realistic_cg", label: "写实CG", keywords: "hyper-realistic CG, unreal engine 5, metahuman, PBR materials, ray tracing, cinematic lighting, 8k", category: "动画类", mediaType: "both" },
+    { id: "toon_shading", label: "卡通渲染", keywords: "toon shaded, cel shading, bold outlines, flat colors, stylized 3D, vibrant, cartoon", category: "动画类", mediaType: "both" },
+    { id: "ghibli", label: "吉卜力风格", keywords: "Studio Ghibli, soft watercolor textures, gentle, warm palette, hand-painted, whimsical, lush nature", category: "动画类", mediaType: "both" },
+    { id: "motion_graphics", label: "动态图形", keywords: "motion graphics, clean vector, geometric shapes, bold colors, flat design, animated, dynamic", category: "动画类", mediaType: "video" },
+    // 艺术流派补充2
+    { id: "graffiti", label: "涂鸦/街头", keywords: "graffiti, spray paint, bold tags, street art, urban, vibrant colors, dripping paint, wheat paste", category: "艺术流派", mediaType: "image" },
+    { id: "flat_design", label: "扁平设计", keywords: "flat design, clean vector, minimal shading, geometric, bold colors, simple shapes, no gradients", category: "现代设计", mediaType: "image" },
+    { id: "line_art", label: "线条画", keywords: "line art, clean ink lines, no fill, minimalist, elegant contours, black on white", category: "艺术流派", mediaType: "image" },
+    { id: "pastel_art", label: "粉彩", keywords: "soft pastel colors, gentle tones, dreamy, delicate, light and airy, muted palette", category: "艺术流派", mediaType: "both" },
+    { id: "collage", label: "拼贴艺术", keywords: "collage art, mixed media, cut paper, layered textures, vintage clippings, eclectic", category: "艺术流派", mediaType: "image" },
+    { id: "pointillism", label: "点彩", keywords: "pointillism, tiny dots, optical color mixing, seurat style, vibrant, textured", category: "艺术流派", mediaType: "image" },
+    // 现代设计补充2
+    { id: "glitch_art", label: "故障艺术", keywords: "glitch art, digital distortion, RGB shift, corrupted data, pixel sorting, VHS artifacts, datamosh", category: "现代设计", mediaType: "both" },
+    { id: "neon", label: "霓虹", keywords: "neon-lit, glowing tubes, vibrant colors on dark, electric, nightlife, luminous, signs", category: "现代设计", mediaType: "both" },
+    { id: "bauhaus", label: "包豪斯", keywords: "bauhaus, geometric primitives, primary colors, functional design, grid, modernist", category: "现代设计", mediaType: "image" },
 ];
 
 /** 提示词生成请求 */

@@ -26,7 +26,7 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
         setExtracting(true);
         setProcessing(true);
         try {
-            const result = await aiExtractAssets(config, current.script);
+            const result = await aiExtractAssets(config, current.script, undefined, current.visualStyle);
             // 为每个资产补充 id
             setAssets({
                 characters: (result.characters || []).map((c) => ({ ...c, id: c.id || nanoid() })),
@@ -72,7 +72,7 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
         setRegenId(id);
         setProcessing(true);
         try {
-            const result = await aiRegenerateAsset(config, current.script, type, name);
+            const result = await aiRegenerateAsset(config, current.script, type, name, undefined, current.visualStyle);
             const patch = { ...result, id, name: (result.name as string) || name };
             if (type === "characters") updateCharacter(id, patch as Partial<CharacterAsset>);
             else if (type === "locations") updateLocation(id, patch as Partial<LocationAsset>);

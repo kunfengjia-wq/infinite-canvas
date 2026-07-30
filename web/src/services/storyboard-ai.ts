@@ -103,11 +103,411 @@ keywords 是用于 AI 生图的英文提示词，必须是纯英文逗号分隔�
 严格以 JSON 格式输出，不要输出任何其他文字：
 {"characters":[...],"locations":[...],"props":[...],"products":[...]}`;
 
-export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
+/** 风格 → keywords 后缀映射表（覆盖 visual-styles.ts 全部 27 种 + 扩展） */
+type StyleSuffixEntry = { charSuffix: string; locSuffix: string; propSuffix: string; prodSuffix: string; styleNote: string };
+
+const STYLE_SUFFIX_MAP: { pattern: RegExp; entry: StyleSuffixEntry }[] = [
+    // ─── 动画 / CG ───
+    { pattern: /3dcg|3d\s*cg|三维|CG/i, entry: {
+        charSuffix: "3D render, CGI, octane render, unreal engine, physically based rendering, ray tracing, global illumination, subsurface scattering, clean topology, smooth geometry",
+        locSuffix: "3D render, CGI, octane render, unreal engine, ray tracing, global illumination, volumetric lighting, detailed 3D environment",
+        propSuffix: "3D render, CGI, octane render, physically based rendering, ray tracing, clean topology, studio lighting, 3D model",
+        prodSuffix: "3D product render, CGI, octane render, physically based rendering, ray tracing, clean background, studio lighting",
+        styleNote: "\n\n【风格强制】本项目视觉风格为 3DCG（三维计算机图形渲染）。所有 keywords 必须体现 3D 渲染特征（3D render, CGI, octane render, unreal engine, PBR, ray tracing, global illumination, subsurface scattering）。这是 CG 渲染而非真实摄影——画面应有明确的 3D 建模/渲染质感（光滑几何体、精确光照计算、材质着色器），而不是真实相机拍摄的照片。禁止出现 photograph, DSLR, film grain, natural photography 等真实摄影词汇。",
+    }},
+    { pattern: /皮克斯|pixar/i, entry: {
+        charSuffix: "Pixar-style 3D character, rounded shapes, big expressive eyes, subsurface scattering, soft global illumination, vibrant saturated colors, cartoon proportions",
+        locSuffix: "Pixar-style 3D environment, soft global illumination, vibrant colors, smooth surfaces, whimsical atmosphere, stylized 3D",
+        propSuffix: "Pixar-style 3D object, smooth geometry, soft shadows, vibrant colors, clean topology, stylized",
+        prodSuffix: "Pixar-style 3D product render, soft global illumination, smooth surfaces, vibrant colors, whimsical",
+        styleNote: "\n\n【风格强制】本项目视觉风格为皮克斯风格（风格化 3D 动画）。所有 keywords 必须体现皮克斯式风格化 3D（Pixar-style, rounded shapes, cartoon proportions, soft GI, vibrant colors），严禁出现 photorealistic, hyperrealistic, real skin, pores 等写实词汇。材质应为光滑塑料感/橡胶感/陶感。",
+    }},
+    { pattern: /日系|动画|anime|二次元/i, entry: {
+        charSuffix: "anime style, cel shading, clean lines, vibrant colors, detailed eyes, 2D illustration",
+        locSuffix: "anime background, cel shading, vibrant colors, detailed scenery, Makoto Shinkai style",
+        propSuffix: "anime style object, cel shading, clean lines, vibrant colors, 2D illustration",
+        prodSuffix: "anime style product, cel shading, clean lines, vibrant colors",
+        styleNote: "\n\n【风格强制】本项目视觉风格为日系动画。所有 keywords 必须体现赛璐璐着色、清晰线条、扁平化光影，严禁出现 photorealistic, 3D render, ray tracing 等写实/3D词汇。",
+    }},
+    { pattern: /二维手绘|手绘|hand.?drawn|2d/i, entry: {
+        charSuffix: "2D hand-drawn illustration, clean ink lines, flat colors, expressive poses, storybook quality",
+        locSuffix: "2D hand-drawn background, painterly, soft gradients, illustrated environment, whimsical",
+        propSuffix: "2D hand-drawn object, clean outlines, flat shading, illustrated, charming",
+        prodSuffix: "2D illustrated product, clean lines, flat colors, charming, hand-drawn feel",
+        styleNote: "\n\n【风格强制】本项目视觉风格为二维手绘。所有 keywords 必须体现手绘插画感（ink lines, flat colors, illustrated），严禁出现 photorealistic, 3D render, ray tracing。",
+    }},
+    { pattern: /定格|stop.?motion|黏土|claymation/i, entry: {
+        charSuffix: "stop motion character, claymation, handcrafted texture, miniature, tactile, Laika studios style",
+        locSuffix: "stop motion set, miniature diorama, handcrafted, tactile materials, practical lighting",
+        propSuffix: "stop motion prop, claymation, handcrafted, miniature, tactile texture",
+        prodSuffix: "stop motion product, miniature, handcrafted, practical lighting, tactile",
+        styleNote: "\n\n【风格强制】本项目视觉风格为定格动画。所有 keywords 必须体现手工质感（claymation, handcrafted, miniature, tactile），严禁出现 photorealistic, CGI, digital render。",
+    }},
+    { pattern: /国风水墨|水墨|chinese.?ink/i, entry: {
+        charSuffix: "chinese ink painting style, brush strokes, flowing ink, ethereal, traditional animation, xuan paper texture",
+        locSuffix: "chinese ink landscape, shan shui, brush strokes, negative space, misty mountains, ethereal",
+        propSuffix: "chinese ink painting object, brush strokes, flowing ink, minimalist, traditional",
+        prodSuffix: "chinese ink style product, brush strokes, elegant, minimalist, traditional aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为国风水墨。所有 keywords 必须体现水墨画语言（brush strokes, flowing ink, negative space, xuan paper），严禁出现 photorealistic, 3D, neon。",
+    }},
+    { pattern: /低多边形|low.?poly/i, entry: {
+        charSuffix: "low poly character, geometric facets, flat shading, polygon art, clean edges, minimalist 3D",
+        locSuffix: "low poly environment, geometric facets, flat shading, polygon landscape, clean edges",
+        propSuffix: "low poly object, geometric facets, flat shading, polygon art, clean edges",
+        prodSuffix: "low poly product, geometric facets, flat shading, minimalist 3D, clean",
+        styleNote: "\n\n【风格强制】本项目视觉风格为低多边形。所有 keywords 必须体现多边形面片感（low poly, geometric facets, flat shading），严禁出现 photorealistic, smooth, organic。",
+    }},
+    { pattern: /像素|pixel/i, entry: {
+        charSuffix: "pixel art character, 16-bit, sprite, retro game, clean pixels, nostalgic gaming",
+        locSuffix: "pixel art environment, 16-bit, tileset, retro game, detailed pixelwork",
+        propSuffix: "pixel art object, 16-bit, sprite, retro game, clean pixels",
+        prodSuffix: "pixel art product, 16-bit, retro, clean pixels, nostalgic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为像素艺术。所有 keywords 必须体现像素感（pixel art, 8-bit, 16-bit, sprite），严禁出现 photorealistic, smooth, high resolution。",
+    }},
+    // ─── 艺术画风 ───
+    { pattern: /水彩|watercolor/i, entry: {
+        charSuffix: "watercolor illustration, soft washes, bleeding edges, transparent layers, paper texture, delicate",
+        locSuffix: "watercolor landscape, soft washes, wet-on-wet, transparent layers, paper texture, atmospheric",
+        propSuffix: "watercolor object, soft washes, bleeding edges, transparent, paper texture",
+        prodSuffix: "watercolor product illustration, soft washes, delicate, transparent layers, artistic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为水彩。所有 keywords 必须体现水彩质感（soft washes, bleeding edges, transparent, paper texture），严禁出现 photorealistic, 3D, sharp edges。",
+    }},
+    { pattern: /油画|oil.?painting/i, entry: {
+        charSuffix: "oil painting portrait, impasto, rich texture, visible brushstrokes, classical technique, canvas",
+        locSuffix: "oil painting landscape, impasto, rich colors, visible brushstrokes, classical, canvas texture",
+        propSuffix: "oil painting still life, impasto, rich texture, visible brushstrokes, classical",
+        prodSuffix: "oil painting product, rich texture, visible brushstrokes, classical, artistic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为油画。所有 keywords 必须体现油画质感（impasto, visible brushstrokes, canvas texture, rich colors），严禁出现 photorealistic, digital, flat。",
+    }},
+    { pattern: /素描|sketch/i, entry: {
+        charSuffix: "pencil sketch, graphite, cross-hatching, tonal shading, hand-drawn, artistic study",
+        locSuffix: "pencil sketch environment, graphite, cross-hatching, perspective study, tonal",
+        propSuffix: "pencil sketch object, graphite, cross-hatching, tonal shading, study",
+        prodSuffix: "pencil sketch product, graphite, cross-hatching, artistic, hand-drawn",
+        styleNote: "\n\n【风格强制】本项目视觉风格为素描。所有 keywords 必须体现铅笔素描感（graphite, cross-hatching, tonal shading），严禁出现 color, photorealistic, 3D。",
+    }},
+    { pattern: /浮世绘|ukiyo/i, entry: {
+        charSuffix: "ukiyo-e style, japanese woodblock print, flat colors, bold outlines, hokusai inspired",
+        locSuffix: "ukiyo-e landscape, japanese woodblock print, flat colors, bold outlines, wave patterns",
+        propSuffix: "ukiyo-e style object, japanese woodblock print, flat colors, bold outlines",
+        prodSuffix: "ukiyo-e style product, japanese woodblock print, flat colors, decorative",
+        styleNote: "\n\n【风格强制】本项目视觉风格为浮世绘。所有 keywords 必须体现木版画感（woodblock print, flat colors, bold outlines），严禁出现 photorealistic, 3D, gradient。",
+    }},
+    { pattern: /插画|illustration/i, entry: {
+        charSuffix: "digital illustration, clean lines, vibrant colors, stylized, editorial quality",
+        locSuffix: "digital illustration environment, stylized, vibrant colors, editorial, detailed",
+        propSuffix: "digital illustration object, clean lines, vibrant colors, stylized",
+        prodSuffix: "digital illustration product, stylized, vibrant, editorial quality",
+        styleNote: "\n\n【风格强制】本项目视觉风格为插画风。所有 keywords 必须体现插画感（illustration, stylized, clean lines），严禁出现 photorealistic, photograph。",
+    }},
+    { pattern: /漫画|comic|manga/i, entry: {
+        charSuffix: "comic book style, bold outlines, halftone dots, dynamic action, graphic novel, ink",
+        locSuffix: "comic book environment, bold outlines, halftone dots, dramatic perspective, graphic novel",
+        propSuffix: "comic book style object, bold outlines, halftone dots, dynamic, graphic",
+        prodSuffix: "comic book style product, bold outlines, halftone, dynamic, graphic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为漫画风。所有 keywords 必须体现漫画感（bold outlines, halftone dots, graphic novel），严禁出现 photorealistic, smooth, 3D。",
+    }},
+    // ─── 科幻 / 奇幻 ───
+    { pattern: /赛博朋克|cyberpunk/i, entry: {
+        charSuffix: "cyberpunk style, neon-lit, chrome implants, holographic HUD, rain-soaked, dystopian fashion",
+        locSuffix: "cyberpunk cityscape, neon lights, holographic signs, rain-soaked streets, dystopian, blade runner",
+        propSuffix: "cyberpunk gadget, neon glow, chrome, holographic, futuristic tech, dystopian",
+        prodSuffix: "cyberpunk product, neon accent, chrome, holographic, futuristic, dark background",
+        styleNote: "\n\n【风格强制】本项目视觉风格为赛博朋克。所有 keywords 必须体现赛博朋克美学（neon, chrome, holographic, dystopian, rain），严禁出现 pastoral, natural light, warm cozy。",
+    }},
+    { pattern: /蒸汽朋克|steampunk/i, entry: {
+        charSuffix: "steampunk character, brass goggles, victorian fashion, mechanical limbs, copper gears, leather",
+        locSuffix: "steampunk environment, brass gears, steam pipes, victorian architecture, copper, mechanical",
+        propSuffix: "steampunk gadget, brass, copper gears, steam powered, victorian, mechanical",
+        prodSuffix: "steampunk product, brass, copper, gears, victorian design, mechanical aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为蒸汽朋克。所有 keywords 必须体现蒸汽朋克美学（brass, gears, steam, victorian, copper），严禁出现 modern, digital, neon。",
+    }},
+    { pattern: /科幻未来|sci.?fi|futuristic/i, entry: {
+        charSuffix: "sci-fi character, futuristic suit, holographic interface, sleek design, advanced technology",
+        locSuffix: "sci-fi environment, futuristic architecture, holographic displays, sleek surfaces, advanced tech",
+        propSuffix: "sci-fi gadget, futuristic, sleek, holographic, advanced technology, glowing",
+        prodSuffix: "sci-fi product, futuristic design, sleek, holographic accent, advanced, clean",
+        styleNote: "\n\n【风格强制】本项目视觉风格为科幻未来。所有 keywords 必须体现未来科技感（futuristic, holographic, sleek, advanced tech），严禁出现 vintage, rustic, medieval。",
+    }},
+    { pattern: /奇幻|fantasy|史诗/i, entry: {
+        charSuffix: "fantasy character, ethereal glow, magical aura, ornate armor, epic, mythical",
+        locSuffix: "fantasy landscape, magical atmosphere, ethereal glow, epic scale, mythical architecture",
+        propSuffix: "fantasy artifact, magical glow, ornate, mythical, enchanted, ethereal",
+        prodSuffix: "fantasy product, magical glow, ornate design, ethereal, epic quality",
+        styleNote: "\n\n【风格强制】本项目视觉风格为奇幻史诗。所有 keywords 必须体现奇幻感（magical, ethereal, ornate, epic, mythical），严禁出现 modern, mundane, everyday。",
+    }},
+    { pattern: /末日|废土|post.?apocalyptic/i, entry: {
+        charSuffix: "post-apocalyptic character, tattered clothing, dust-covered, survival gear, weathered, gritty",
+        locSuffix: "post-apocalyptic wasteland, ruins, overgrown, dust, desolate, abandoned structures",
+        propSuffix: "post-apocalyptic prop, weathered, rusty, makeshift, survival, worn",
+        prodSuffix: "post-apocalyptic product, weathered, worn, gritty, survival aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为末日废土。所有 keywords 必须体现废土感（ruins, weathered, rusty, desolate, gritty），严禁出现 clean, pristine, luxury。",
+    }},
+    { pattern: /哥特|gothic|暗黑/i, entry: {
+        charSuffix: "gothic character, dark attire, pale skin, dramatic shadows, medieval, ornate dark",
+        locSuffix: "gothic architecture, pointed arches, stained glass, dramatic shadows, dark atmosphere, medieval",
+        propSuffix: "gothic object, dark ornate, dramatic shadows, medieval, macabre, intricate",
+        prodSuffix: "gothic product, dark aesthetic, ornate, dramatic lighting, medieval inspired",
+        styleNote: "\n\n【风格强制】本项目视觉风格为哥特暗黑。所有 keywords 必须体现哥特美学（dark, ornate, pointed arches, dramatic shadows），严禁出现 bright, cheerful, pastel。",
+    }},
+    { pattern: /梦幻|童话|fairy.?tale|whimsical/i, entry: {
+        charSuffix: "fairy tale character, whimsical, soft pastel, magical sparkle, storybook, gentle",
+        locSuffix: "fairy tale environment, whimsical, soft pastel, magical glow, storybook, enchanted forest",
+        propSuffix: "fairy tale object, whimsical, soft pastel, magical sparkle, storybook, charming",
+        prodSuffix: "fairy tale product, whimsical, soft pastel, magical, charming, storybook quality",
+        styleNote: "\n\n【风格强制】本项目视觉风格为梦幻童话。所有 keywords 必须体现童话感（whimsical, soft pastel, magical, storybook），严禁出现 dark, horror, gritty, dystopian。",
+    }},
+    // ─── 影视写实（默认方向，但也要明确） ───
+    { pattern: /电影写实|cinematic|胶片|film/i, entry: {
+        charSuffix: "cinematic, film grain, dramatic lighting, shallow depth of field, color graded",
+        locSuffix: "cinematic, wide angle, film grain, dramatic lighting, atmospheric, color graded",
+        propSuffix: "isolated object, white background, studio lighting, product photography, close-up, ultra detailed",
+        prodSuffix: "clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial",
+        styleNote: "",
+    }},
+    { pattern: /纪录片|documentary/i, entry: {
+        charSuffix: "documentary style, natural light, candid, raw, observational, handheld feel",
+        locSuffix: "documentary style, natural light, raw footage, observational, handheld, vérité",
+        propSuffix: "documentary style object, natural light, raw, unstyled, authentic",
+        prodSuffix: "documentary style product, natural light, authentic, raw, unstyled",
+        styleNote: "",
+    }},
+    { pattern: /广告|commercial/i, entry: {
+        charSuffix: "commercial quality, studio lighting, premium, high-end, polished, editorial",
+        locSuffix: "commercial quality, studio lighting, premium, clean, high-end, polished",
+        propSuffix: "commercial product shot, studio lighting, premium, clean background, high-end, 8k",
+        prodSuffix: "commercial product photography, studio softbox, hero angle, premium, 8k, clean background",
+        styleNote: "",
+    }},
+    // ─── 3D / CG 补充 ───
+    { pattern: /写实CG|游戏过场|realistic\s*cg/i, entry: {
+        charSuffix: "hyper-realistic CG character, unreal engine 5, metahuman, PBR materials, ray tracing, cinematic lighting, 8k detail",
+        locSuffix: "hyper-realistic CG environment, unreal engine 5, ray tracing, volumetric fog, PBR materials, cinematic",
+        propSuffix: "hyper-realistic CG object, PBR materials, ray tracing, unreal engine, 8k, studio lighting",
+        prodSuffix: "hyper-realistic CG product, PBR materials, ray tracing, studio lighting, 8k, clean background",
+        styleNote: "\n\n【风格强制】本项目视觉风格为写实CG（游戏过场级别）。所有 keywords 必须体现高端 CG 渲染（unreal engine 5, metahuman, PBR, ray tracing, 8k），这是 CG 渲染而非真实摄影，禁止出现 photograph, DSLR, film grain。",
+    }},
+    { pattern: /卡通渲染|toon\s*shad/i, entry: {
+        charSuffix: "toon shaded character, cel shading, bold outlines, flat colors, stylized 3D, vibrant",
+        locSuffix: "toon shaded environment, cel shading, bold outlines, flat colors, stylized 3D, vibrant",
+        propSuffix: "toon shaded object, cel shading, bold outlines, flat colors, stylized 3D",
+        prodSuffix: "toon shaded product, cel shading, bold outlines, flat colors, stylized",
+        styleNote: "\n\n【风格强制】本项目视觉风格为卡通渲染（Toon Shading）。所有 keywords 必须体现卡通着色（cel shading, bold outlines, flat colors），严禁出现 photorealistic, PBR, ray tracing。",
+    }},
+    { pattern: /等距|isometric/i, entry: {
+        charSuffix: "isometric character, 30 degree angle, clean vector, miniature, diorama, stylized",
+        locSuffix: "isometric environment, 30 degree angle, clean vector, miniature diorama, no perspective distortion",
+        propSuffix: "isometric object, 30 degree angle, clean vector, miniature, stylized",
+        prodSuffix: "isometric product, 30 degree angle, clean vector, miniature, stylized",
+        styleNote: "\n\n【风格强制】本项目视觉风格为等距视角。所有 keywords 必须体现等距投影（isometric, 30 degree angle, no perspective distortion），严禁出现 wide angle, fisheye, vanishing point。",
+    }},
+    // ─── 二维动画补充 ───
+    { pattern: /吉卜力|ghibli/i, entry: {
+        charSuffix: "Studio Ghibli style, soft watercolor textures, gentle expressions, warm palette, hand-painted, whimsical",
+        locSuffix: "Studio Ghibli background, lush nature, soft clouds, warm light, hand-painted, pastoral, detailed scenery",
+        propSuffix: "Studio Ghibli style object, soft watercolor, hand-painted, warm, whimsical, gentle",
+        prodSuffix: "Studio Ghibli style product, soft watercolor, hand-painted, warm palette, whimsical",
+        styleNote: "\n\n【风格强制】本项目视觉风格为吉卜力。所有 keywords 必须体现吉卜力工作室美学（hand-painted, soft watercolor, warm palette, lush nature），严禁出现 3D render, CGI, photorealistic。",
+    }},
+    { pattern: /动态图形|motion\s*graphic/i, entry: {
+        charSuffix: "motion graphics style, clean vector, geometric shapes, bold colors, flat design, animated",
+        locSuffix: "motion graphics environment, clean vector, geometric, bold colors, flat design, dynamic",
+        propSuffix: "motion graphics object, clean vector, geometric, bold colors, flat, minimal",
+        prodSuffix: "motion graphics product, clean vector, geometric, bold colors, flat design",
+        styleNote: "\n\n【风格强制】本项目视觉风格为动态图形。所有 keywords 必须体现 MG 动画美学（clean vector, geometric shapes, bold colors, flat design），严禁出现 photorealistic, texture, grain。",
+    }},
+    // ─── 艺术画风补充 ───
+    { pattern: /涂鸦|街头|graffiti|street\s*art/i, entry: {
+        charSuffix: "graffiti style, spray paint, bold tags, street art, urban, vibrant colors, dripping paint",
+        locSuffix: "street art mural, graffiti wall, spray paint, urban, bold colors, dripping, wheat paste",
+        propSuffix: "graffiti style object, spray paint, bold, street art, urban, vibrant",
+        prodSuffix: "street art style product, spray paint, bold colors, urban, graffiti aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为涂鸦/街头艺术。所有 keywords 必须体现街头美学（spray paint, graffiti, urban, dripping paint），严禁出现 clean, minimal, corporate。",
+    }},
+    { pattern: /扁平设计|flat\s*design/i, entry: {
+        charSuffix: "flat design character, clean vector, minimal shading, geometric, bold colors, simple shapes",
+        locSuffix: "flat design environment, clean vector, minimal, geometric, bold colors, no gradients",
+        propSuffix: "flat design object, clean vector, minimal shading, geometric, bold colors",
+        prodSuffix: "flat design product, clean vector, minimal, geometric, bold colors, simple",
+        styleNote: "\n\n【风格强制】本项目视觉风格为扁平设计。所有 keywords 必须体现扁平化（flat, clean vector, minimal shading, geometric），严禁出现 realistic, texture, 3D, gradient。",
+    }},
+    { pattern: /线条画|line\s*art/i, entry: {
+        charSuffix: "line art, clean ink lines, no fill, minimalist, elegant contours, black on white",
+        locSuffix: "line art environment, clean ink lines, no fill, architectural, elegant, minimalist",
+        propSuffix: "line art object, clean ink lines, no fill, minimalist, elegant contours",
+        prodSuffix: "line art product, clean ink lines, no fill, minimalist, elegant",
+        styleNote: "\n\n【风格强制】本项目视觉风格为线条画。所有 keywords 必须体现纯线条（line art, ink lines, no fill, minimalist），严禁出现 color fill, realistic, 3D, shading。",
+    }},
+    { pattern: /粉彩|pastel/i, entry: {
+        charSuffix: "soft pastel colors, gentle tones, dreamy, delicate, light and airy, muted palette",
+        locSuffix: "soft pastel environment, gentle tones, dreamy, delicate, light and airy, muted",
+        propSuffix: "soft pastel object, gentle tones, dreamy, delicate, muted palette",
+        prodSuffix: "soft pastel product, gentle tones, dreamy, delicate, light, muted",
+        styleNote: "\n\n【风格强制】本项目视觉风格为粉彩。所有 keywords 必须体现柔和粉彩色调（soft pastel, gentle, dreamy, muted palette），严禁出现 bold, neon, high contrast, dark。",
+    }},
+    { pattern: /拼贴|collage/i, entry: {
+        charSuffix: "collage art, mixed media, cut paper, layered textures, vintage clippings, eclectic",
+        locSuffix: "collage environment, mixed media, cut paper, layered, vintage clippings, eclectic",
+        propSuffix: "collage object, mixed media, cut paper, layered textures, vintage, eclectic",
+        prodSuffix: "collage style product, mixed media, cut paper, layered, vintage, eclectic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为拼贴艺术。所有 keywords 必须体现拼贴感（collage, mixed media, cut paper, layered textures），严禁出现 clean, digital, smooth, 3D。",
+    }},
+    { pattern: /点彩|pointillism/i, entry: {
+        charSuffix: "pointillism, tiny dots, optical color mixing, seurat style, vibrant, textured",
+        locSuffix: "pointillism landscape, tiny dots, optical color mixing, vibrant, textured, impressionist",
+        propSuffix: "pointillism object, tiny dots, optical color mixing, vibrant, textured",
+        prodSuffix: "pointillism product, tiny dots, optical color mixing, vibrant, artistic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为点彩。所有 keywords 必须体现点彩画法（pointillism, tiny dots, optical color mixing），严禁出现 smooth, flat, digital, clean lines。",
+    }},
+    // ─── 科幻/奇幻补充 ───
+    { pattern: /机甲|mecha/i, entry: {
+        charSuffix: "mecha pilot, mechanical armor, futuristic suit, glowing cockpit, industrial design, metal panels",
+        locSuffix: "mecha hangar, industrial, metal panels, warning stripes, hydraulic systems, sci-fi military",
+        propSuffix: "mecha part, mechanical, metal panels, hydraulic, industrial, glowing accents",
+        prodSuffix: "mecha-inspired product, mechanical, metal panels, industrial design, glowing accents",
+        styleNote: "\n\n【风格强制】本项目视觉风格为机甲。所有 keywords 必须体现机甲美学（mecha, mechanical, metal panels, hydraulic, industrial），严禁出现 organic, soft, pastel, cute。",
+    }},
+    { pattern: /仙侠|xianxia|修仙/i, entry: {
+        charSuffix: "xianxia character, flowing robes, ethereal qi, celestial, jade ornaments, mystical aura, chinese mythology",
+        locSuffix: "xianxia landscape, floating mountains, misty peaks, celestial palace, waterfalls, mystical clouds",
+        propSuffix: "xianxia artifact, jade, glowing runes, celestial, mystical, ancient chinese",
+        prodSuffix: "xianxia style product, jade, celestial, mystical, elegant, chinese mythology",
+        styleNote: "\n\n【风格强制】本项目视觉风格为仙侠。所有 keywords 必须体现仙侠美学（flowing robes, celestial, jade, mystical, floating mountains），严禁出现 cyberpunk, neon, mechanical。",
+    }},
+    { pattern: /克苏鲁|lovecraft|cthulhu/i, entry: {
+        charSuffix: "lovecraftian horror, eldritch, tentacles, cosmic dread, ancient ones, maddening, dark",
+        locSuffix: "lovecraftian environment, eldritch architecture, non-euclidean, cosmic horror, dark, oppressive",
+        propSuffix: "lovecraftian artifact, eldritch, tentacles, ancient, cosmic horror, dark, ominous",
+        prodSuffix: "lovecraftian product, eldritch, dark, ancient, cosmic horror, ominous",
+        styleNote: "\n\n【风格强制】本项目视觉风格为克苏鲁。所有 keywords 必须体现宇宙恐怖（eldritch, tentacles, cosmic dread, non-euclidean），严禁出现 bright, cheerful, cute, pastel。",
+    }},
+    { pattern: /太空歌剧|space\s*opera/i, entry: {
+        charSuffix: "space opera character, epic scale, starship captain, futuristic uniform, cosmic backdrop",
+        locSuffix: "space opera environment, epic starships, nebula, alien worlds, interstellar, cosmic scale",
+        propSuffix: "space opera prop, futuristic, cosmic, alien technology, epic scale",
+        prodSuffix: "space opera product, futuristic, cosmic, sleek, epic, interstellar",
+        styleNote: "\n\n【风格强制】本项目视觉风格为太空歌剧。所有 keywords 必须体现史诗太空感（epic scale, starships, nebula, interstellar, cosmic），严禁出现 mundane, everyday, grounded。",
+    }},
+    { pattern: /太阳朋克|solarpunk/i, entry: {
+        charSuffix: "solarpunk character, green technology, sustainable fashion, optimistic, plants and tech harmony",
+        locSuffix: "solarpunk city, green architecture, solar panels, plants and tech harmony, optimistic future, bright",
+        propSuffix: "solarpunk gadget, green technology, sustainable, organic curves, solar powered",
+        prodSuffix: "solarpunk product, green technology, sustainable, organic, optimistic, bright",
+        styleNote: "\n\n【风格强制】本项目视觉风格为太阳朋克。所有 keywords 必须体现绿色乌托邦（green technology, sustainable, plants and tech, optimistic），严禁出现 dystopian, dark, neon, grimy。",
+    }},
+    // ─── 现代设计/潮流 ───
+    { pattern: /极简|minimal/i, entry: {
+        charSuffix: "minimalist, clean composition, negative space, simple geometry, monochrome, elegant",
+        locSuffix: "minimalist environment, clean, negative space, simple geometry, monochrome, serene",
+        propSuffix: "minimalist object, clean, simple geometry, monochrome, negative space",
+        prodSuffix: "minimalist product, clean, simple, monochrome, negative space, elegant",
+        styleNote: "",
+    }},
+    { pattern: /蒸汽波|vaporwave/i, entry: {
+        charSuffix: "vaporwave aesthetic, retro futurism, greek statues, pastel gradient, glitch, 80s 90s nostalgia",
+        locSuffix: "vaporwave environment, retro futurism, pastel gradient, greek columns, glitch art, neon pink",
+        propSuffix: "vaporwave object, retro futurism, pastel gradient, glitch, chrome, nostalgia",
+        prodSuffix: "vaporwave product, retro futurism, pastel gradient, chrome, glitch, nostalgic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为蒸汽波。所有 keywords 必须体现蒸汽波美学（retro futurism, pastel gradient, greek statues, glitch, 80s/90s），严禁出现 modern, clean, corporate。",
+    }},
+    { pattern: /y2k/i, entry: {
+        charSuffix: "Y2K aesthetic, metallic, butterfly, glossy, futuristic retro, pink chrome, 2000s",
+        locSuffix: "Y2K environment, metallic surfaces, glossy, futuristic retro, pink chrome, 2000s nostalgia",
+        propSuffix: "Y2K object, metallic, glossy, pink chrome, futuristic retro, 2000s",
+        prodSuffix: "Y2K product, metallic, glossy, pink chrome, futuristic retro, 2000s aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为 Y2K。所有 keywords 必须体现千禧美学（metallic, glossy, pink chrome, butterfly, 2000s），严禁出现 minimalist, matte, natural。",
+    }},
+    { pattern: /酸性|acid\s*graphic/i, entry: {
+        charSuffix: "acid graphics, chrome text, liquid metal, distorted, rave culture, neon on black",
+        locSuffix: "acid graphics environment, chrome, liquid metal, distorted, rave, neon on black",
+        propSuffix: "acid graphics object, chrome, liquid metal, distorted, neon, rave",
+        prodSuffix: "acid graphics product, chrome, liquid metal, distorted, neon, rave aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为酸性设计。所有 keywords 必须体现酸性美学（chrome, liquid metal, distorted, rave, neon on black），严禁出现 clean, corporate, pastel, soft。",
+    }},
+    { pattern: /故障艺术|glitch/i, entry: {
+        charSuffix: "glitch art, digital distortion, RGB shift, corrupted data, pixel sorting, VHS artifacts",
+        locSuffix: "glitch art environment, digital distortion, RGB shift, corrupted, pixel sorting, datamosh",
+        propSuffix: "glitch art object, digital distortion, RGB shift, corrupted, pixel sorting",
+        prodSuffix: "glitch art product, digital distortion, RGB shift, corrupted, VHS artifacts",
+        styleNote: "\n\n【风格强制】本项目视觉风格为故障艺术。所有 keywords 必须体现数字故障感（glitch, RGB shift, corrupted, pixel sorting, datamosh），严禁出现 clean, smooth, pristine。",
+    }},
+    { pattern: /霓虹|neon/i, entry: {
+        charSuffix: "neon-lit, glowing tubes, vibrant colors on dark, electric, nightlife, luminous",
+        locSuffix: "neon-lit environment, glowing tubes, vibrant colors on dark, electric, nightlife, signs",
+        propSuffix: "neon object, glowing tubes, vibrant on dark, electric, luminous",
+        prodSuffix: "neon product, glowing tubes, vibrant on dark, electric, luminous, dramatic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为霓虹。所有 keywords 必须体现霓虹灯光感（neon, glowing tubes, vibrant on dark, electric），严禁出现 natural light, daylight, matte。",
+    }},
+    { pattern: /包豪斯|bauhaus/i, entry: {
+        charSuffix: "bauhaus style, geometric primitives, primary colors, functional design, grid, modernist",
+        locSuffix: "bauhaus architecture, geometric primitives, primary colors, functional, grid, modernist",
+        propSuffix: "bauhaus object, geometric primitives, primary colors, functional, modernist",
+        prodSuffix: "bauhaus product, geometric, primary colors, functional design, modernist, grid",
+        styleNote: "\n\n【风格强制】本项目视觉风格为包豪斯。所有 keywords 必须体现包豪斯美学（geometric primitives, primary colors, functional, grid），严禁出现 ornate, decorative, organic, realistic。",
+    }},
+    { pattern: /复古海报|retro\s*poster|vintage\s*poster/i, entry: {
+        charSuffix: "vintage poster style, bold typography, limited palette, WPA style, propaganda art, flat",
+        locSuffix: "vintage poster environment, bold typography, limited palette, travel poster, flat colors",
+        propSuffix: "vintage poster object, bold, limited palette, flat colors, retro print",
+        prodSuffix: "vintage poster product, bold typography, limited palette, flat, retro print",
+        styleNote: "\n\n【风格强制】本项目视觉风格为复古海报。所有 keywords 必须体现复古海报感（bold typography, limited palette, flat colors, WPA style），严禁出现 photorealistic, 3D, gradient。",
+    }},
+    // ─── 影视写实补充 ───
+    { pattern: /黑色电影|film\s*noir/i, entry: {
+        charSuffix: "film noir, high contrast, dramatic shadows, venetian blind lighting, 1940s, black and white",
+        locSuffix: "film noir environment, high contrast, dramatic shadows, rain-slicked streets, 1940s, chiaroscuro",
+        propSuffix: "film noir object, high contrast, dramatic shadows, 1940s, black and white",
+        prodSuffix: "film noir product, high contrast, dramatic shadows, chiaroscuro, 1940s aesthetic",
+        styleNote: "\n\n【风格强制】本项目视觉风格为黑色电影。所有 keywords 必须体现黑色电影美学（high contrast, dramatic shadows, chiaroscuro, 1940s），严禁出现 bright, colorful, cheerful。",
+    }},
+    { pattern: /音乐MV|music\s*video/i, entry: {
+        charSuffix: "music video aesthetic, dynamic lighting, stylized, performance, dramatic, high energy",
+        locSuffix: "music video set, dynamic lighting, stylized, performance stage, dramatic, high energy",
+        propSuffix: "music video prop, stylized, dynamic lighting, dramatic, high energy",
+        prodSuffix: "music video product, stylized, dynamic lighting, dramatic, performance aesthetic",
+        styleNote: "",
+    }},
+    { pattern: /时尚|fashion/i, entry: {
+        charSuffix: "fashion photography, editorial, haute couture, dramatic pose, magazine cover, high fashion",
+        locSuffix: "fashion editorial set, studio, dramatic lighting, high-end, magazine quality",
+        propSuffix: "fashion accessory, editorial, haute couture, premium, magazine quality",
+        prodSuffix: "fashion product, editorial, haute couture, premium, magazine cover quality",
+        styleNote: "",
+    }},
+];
+
+/** 根据视觉风格返回 keywords 后缀/风格修饰 */
+function getStyleKeywordSuffix(visualStyle?: string): StyleSuffixEntry {
+    const style = (visualStyle ?? "").trim();
+    if (!style) {
+        // 无风格 → 默认写实
+        return {
+            charSuffix: "concept art, ultra detailed",
+            locSuffix: "wide angle, cinematic, photorealistic",
+            propSuffix: "isolated object, white background, studio lighting, product photography, close-up",
+            prodSuffix: "clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial",
+            styleNote: "",
+        };
+    }
+    // 匹配已知风格
+    for (const { pattern, entry } of STYLE_SUFFIX_MAP) {
+        if (pattern.test(style)) return entry;
+    }
+    // 自定义风格：将用户输入的风格名直接注入，让 AI 自行匹配
+    return {
+        charSuffix: `${style} style, consistent visual aesthetic`,
+        locSuffix: `${style} style environment, consistent visual aesthetic`,
+        propSuffix: `${style} style object, consistent visual aesthetic`,
+        prodSuffix: `${style} style product, consistent visual aesthetic`,
+        styleNote: `\n\n【风格强制】本项目视觉风格为「${style}」（自定义风格）。所有 keywords 和描述必须严格体现「${style}」的视觉特征，使用该风格的专业术语。禁止偏离到写实摄影或其他无关风格。`,
+    };
+}
+
+export async function aiExtractAssets(config: AiConfig, script: string, onDelta?: (text: string) => void, visualStyle?: string): Promise<StoryAssets> {
     // 超长剧本分块提取（每块约 6000 字，避免超出模型 token 限制导致只识别一部分）
     const CHUNK_SIZE = 6000;
     if (script.length <= CHUNK_SIZE) {
-        return extractAssetsSingle(config, script, onDelta);
+        return extractAssetsSingle(config, script, onDelta, visualStyle);
     }
 
     // 按段落/场景标记分块（优先在自然断点切割）
@@ -116,7 +516,7 @@ export async function aiExtractAssets(config: AiConfig, script: string, onDelta?
 
     for (let i = 0; i < chunks.length; i++) {
         onDelta?.(`正在提取第 ${i + 1}/${chunks.length} 段...\n`);
-        const result = await extractAssetsSingle(config, chunks[i], undefined);
+        const result = await extractAssetsSingle(config, chunks[i], undefined, visualStyle);
         allResults.push(result);
     }
 
@@ -175,14 +575,16 @@ function mergeAssets(results: StoryAssets[]): StoryAssets {
 }
 
 /** 单次资产提取（原始逻辑） */
-async function extractAssetsSingle(config: AiConfig, script: string, onDelta?: (text: string) => void): Promise<StoryAssets> {
+async function extractAssetsSingle(config: AiConfig, script: string, onDelta?: (text: string) => void, visualStyle?: string): Promise<StoryAssets> {
     return withRetry(async () => {
         // 始终使用本地规范（含 keywords 分类型规则），不被远程旧版覆盖
-        const systemPrompt = ASSET_EXTRACTOR_SYSTEM;
+        const styleSuffix = getStyleKeywordSuffix(visualStyle);
+        const systemPrompt = ASSET_EXTRACTOR_SYSTEM + styleSuffix.styleNote;
         const fewShot = await getStoryboardFewShot("asset_extraction");
+        const styleHint = visualStyle ? `\n\n【视觉风格】${visualStyle}（keywords 必须匹配此风格）` : "";
         const messages: AiTextMessage[] = [
             { role: "system", content: systemPrompt + fewShot },
-            { role: "user", content: `请从以下剧本中提取视觉资产：\n\n${script}` },
+            { role: "user", content: `请从以下剧本中提取视觉资产：${styleHint}\n\n${script}` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         const result = parseJsonObject<StoryAssets>(raw);
@@ -192,16 +594,17 @@ async function extractAssetsSingle(config: AiConfig, script: string, onDelta?: (
 }
 
 /** 重新生成单个资产（对某一项不满意时使用） */
-export async function aiRegenerateAsset(config: AiConfig, script: string, assetType: "characters" | "locations" | "props" | "products", assetName: string, onDelta?: (text: string) => void): Promise<Record<string, unknown>> {
+export async function aiRegenerateAsset(config: AiConfig, script: string, assetType: "characters" | "locations" | "props" | "products", assetName: string, onDelta?: (text: string) => void, visualStyle?: string): Promise<Record<string, unknown>> {
     return withRetry(async () => {
         const typeLabel = { characters: "角色", locations: "场景/地点", props: "道具", products: "产品/品牌" }[assetType];
+        const styleSuffix = getStyleKeywordSuffix(visualStyle);
         const keywordRules: Record<string, string> = {
-            characters: "keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, concept art' 结尾。禁止包含任何场景/环境。禁止包含手持道具、武器、其他角色、动物——角色必须是独立干净的纯角色设定图。",
-            locations: "keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 'wide angle, cinematic' 结尾。禁止包含具体角色名、外貌描述、特定人物（可用 distant silhouette 做比例参考）。",
-            props: "keywords 必须是孤立物体：以物体名+材质/颜色开头，以 'isolated object, white background, studio lighting, product photography, close-up' 结尾。禁止包含环境（桌面/房间/户外）、人物（hand, person, woman）、使用场景。",
-            products: "keywords 必须是商业产品照格式：以产品名+外观开头，以 'clean white background, studio softbox lighting, hero angle, product photography, 8k, commercial' 结尾。禁止包含模特、手、使用者（hand holding, model wearing, person using）。",
+            characters: `keywords 必须是三视图格式：以 'character design sheet, front view, side view, back view' 开头，包含外貌/服装细节，以 'neutral T-pose, white background, reference sheet, ${styleSuffix.charSuffix}' 结尾。禁止包含任何场景/环境。禁止包含手持道具、武器、其他角色、动物——角色必须是独立干净的纯角色设定图。`,
+            locations: `keywords 是完整环境描述：包含室内/室外、空间结构、材质、光线、氛围，以 '${styleSuffix.locSuffix}' 结尾。禁止包含具体角色名、外貌描述、特定人物（可用 distant silhouette 做比例参考）。`,
+            props: `keywords 必须是孤立物体：以物体名+材质/颜色开头，以 '${styleSuffix.propSuffix}' 结尾。禁止包含环境（桌面/房间/户外）、人物（hand, person, woman）、使用场景。`,
+            products: `keywords 必须是商业产品照格式：以产品名+外观开头，以 '${styleSuffix.prodSuffix}' 结尾。禁止包含模特、手、使用者（hand holding, model wearing, person using）。`,
         };
-        const systemPrompt = `你是一位资深影视美术指导。用户会给你一段剧本和一个已有的${typeLabel}名称「${assetName}」，你需要重新为该${typeLabel}生成更详细、更专业的视觉描述。
+        const systemPrompt = `你是一位资深影视美术指导。用户会给你一段剧本和一个已有的${typeLabel}名称「${assetName}」，你需要重新为该${typeLabel}生成更详细、更专业的视觉描述。${styleSuffix.styleNote}
 
 输出要求：
 1. 仅输出该单个${typeLabel}的 JSON 对象（不要数组）
@@ -209,9 +612,10 @@ export async function aiRegenerateAsset(config: AiConfig, script: string, assetT
 3. ${keywordRules[assetType]}
 4. keywords 纯英文逗号分隔标签，keywordsZh 提供逐条中文翻译
 5. 严格以 JSON 格式输出，不要输出任何其他文字`;
+        const styleHint = visualStyle ? `\n视觉风格：${visualStyle}` : "";
         const messages: AiTextMessage[] = [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `剧本：\n${script}\n\n请重新生成${typeLabel}「${assetName}」的详细视觉描述：` },
+            { role: "user", content: `剧本：\n${script}${styleHint}\n\n请重新生成${typeLabel}「${assetName}」的详细视觉描述：` },
         ];
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         return parseJsonObject<Record<string, unknown>>(raw);
@@ -327,27 +731,32 @@ export async function aiGenerateShots(config: AiConfig, sceneTitle: string, scen
 
 // ─── Skill: 画面描述生成 ─────────────────────────────────────────
 
-const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述大师，精通摄影、灯光、调色和构图的专业词汇。用户会给你一个镜头的完整信息（景别、角度、运镜、焦距、光线、动作、氛围）以及项目资产，你需要生成一段电影级画面视觉描述。
+const VISUAL_DESCRIPTOR_SYSTEM = `你是一位视觉描述大师，精通多种视觉风格的画面构建。用户会给你一个镜头的完整信息（景别、角度、运镜、焦距、光线、动作、氛围）、项目资产以及【视觉风格】，你需要生成严格匹配该风格的画面视觉描述。
 
-要求：
-1. 描述涵盖七要素：主体、动作、环境、光线、色彩、构图、材质/质感
-2. 必须体现镜头语言：将运镜方式转化为画面动态描述（如"镜头缓缓推近"、"航拍俯瞰大地"）
-3. 必须体现光线设计：说明光源方向、色温、光影效果（如"逆光勾勒发丝轮廓，暖金色光晕弥漫"）
-4. 必须结合资产信息确保视觉一致性（角色外貌、场景环境、产品外观）
-5. 使用专业色彩词汇：不要"红色"，用"深绯红"、"铁锈红"、"珊瑚粉"
-6. 加入材质/质感描述：皮肤质感、织物纹理、金属反光、玻璃折射、烟雾颗粒
-7. 100-200字，信息密度高，每句话都有视觉价值，适合作为 AI 生图/生视频输入
-8. 直接输出描述文本，不要加引号或前缀`;
+核心规则：
+1. 【风格优先】严格遵循用户指定的视觉风格，不同风格的描述语言完全不同：
+   - 3DCG：强调「3D render、CGI、octane render、unreal engine、PBR、ray tracing、global illumination、subsurface scattering、clean topology」，这是 CG 渲染而非真实摄影，禁止出现"photograph/DSLR/film grain/natural photography"等真实摄影词汇
+   - 皮克斯：强调「Pixar-style、rounded shapes、cartoon proportions、soft GI、vibrant colors、光滑塑料感」，禁止出现"photorealistic/real skin/pores"等写实词汇
+   - 电影写实：强调「胶片颗粒、浅景深、自然光、真实材质纹理、色彩分级」
+   - 日系动画：强调「赛璐璐着色、清晰线条、大眼睛、扁平化光影」
+   - 其他风格：使用该风格的专业术语
+2. 描述涵盖七要素：主体、动作、环境、光线、色彩、构图、材质/质感
+3. 必须体现镜头语言：将运镜方式转化为画面动态描述
+4. 必须体现光线设计：说明光源方向、色温、氛围
+5. 材质描述必须匹配风格（3DCG=光滑塑料感/橡胶感；写实=皮肤毛孔/织物纤维）
+6. 100-200字，信息密度高，适合作为 AI 生图/生视频输入
+7. 直接输出描述文本，不要加引号或前缀`;
 
-export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string; composition?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void): Promise<string> {
+export async function aiGenerateVisualDescription(config: AiConfig, shot: { shotType: string; angle: string; action: string; mood?: string; dialogue?: string; cameraMovement?: string; lens?: string; lighting?: string; composition?: string }, sceneContext: string, assetsContext?: string, onDelta?: (text: string) => void, visualStyle?: string): Promise<string> {
     const systemPrompt = (await getSkillPrompt("sb_visual_description")) ?? VISUAL_DESCRIPTOR_SYSTEM;
     const fewShot = await getStoryboardFewShot("visual_description");
     const userContent = [
+        visualStyle ? `【视觉风格】${visualStyle}（描述必须严格匹配此风格，禁止偏离）` : "",
         `场景背景：${sceneContext}`,
         assetsContext ? `\n项目资产（角色/场景/道具）：\n${assetsContext}` : "",
         `\n镜头信息：景别=${shot.shotType}，角度=${shot.angle}，动作=${shot.action}${shot.cameraMovement ? `，运镜=${shot.cameraMovement}` : ""}${shot.lens ? `，镜头=${shot.lens}` : ""}${shot.lighting ? `，光线=${shot.lighting}` : ""}${shot.composition ? `，构图=${shot.composition}` : ""}${shot.mood ? `，氛围=${shot.mood}` : ""}${shot.dialogue ? `，对白="${shot.dialogue}"` : ""}`,
         "\n请生成画面视觉描述：",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     const messages: AiTextMessage[] = [
         { role: "system", content: systemPrompt + fewShot },
         { role: "user", content: userContent },

@@ -32,6 +32,8 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                 { shotType: shot.shotType, angle: shot.angle, action: shot.action, mood: shot.mood, dialogue: shot.dialogue, cameraMovement: shot.cameraMovement, lens: shot.lens, lighting: shot.lighting },
                 sceneContext,
                 assetsCtx || undefined,
+                undefined,
+                current.visualStyle,
             );
             updateShotDescription(scene.id, shot.id, description);
         } catch (error) {
@@ -57,6 +59,8 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
                     { shotType: shot.shotType, angle: shot.angle, action: shot.action, mood: shot.mood, dialogue: shot.dialogue, cameraMovement: shot.cameraMovement, lens: shot.lens, lighting: shot.lighting },
                     sceneContext,
                     assetsCtx || undefined,
+                    undefined,
+                    current.visualStyle,
                 );
                 updateShotDescription(scene.id, shot.id, description);
                 success++;
