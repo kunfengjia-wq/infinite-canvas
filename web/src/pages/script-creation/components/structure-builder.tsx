@@ -1,6 +1,6 @@
-import { GitBranch, GripVertical, LoaderCircle, Sparkles } from "lucide-react";
+import { GitBranch, GripVertical, LoaderCircle, Pencil, Sparkles } from "lucide-react";
 import { useRef, useState } from "react";
-import { App, Button, Tag } from "antd";
+import { App, Button, Input, InputNumber, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
 import { aiGenerateStructures } from "@/services/script-creation-ai";
@@ -18,7 +18,7 @@ const STRUCTURE_COLORS: Record<string, string> = {
 
 export function StructureBuilder({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setStructureProposals, reorderBeatsInProposal, confirmStructure, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setStructureProposals, reorderBeatsInProposal, updateBeatInProposal, confirmStructure, saveCurrent } = useScriptCreationStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     if (!current) return null;
@@ -83,7 +83,7 @@ export function StructureBuilder({ config }: { config: AiConfig }) {
                 <>
                     <div className="space-y-4">
                         {proposals.map((p) => (
-                            <StructureCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} onReorder={reorderBeatsInProposal} />
+                            <StructureCard key={p.id} proposal={p} selected={selectedId === p.id} onSelect={() => setSelectedId(p.id)} onReorder={reorderBeatsInProposal} onEditBeat={updateBeatInProposal} />
                         ))}
                     </div>
 
@@ -101,10 +101,13 @@ export function StructureBuilder({ config }: { config: AiConfig }) {
     );
 }
 
-function StructureCard({ proposal, selected, onSelect, onReorder }: { proposal: StructureProposal; selected: boolean; onSelect: () => void; onReorder: (proposalId: string, from: number, to: number) => void }) {
+function StructureCard({ proposal, selected, onSelect, onReorder, onEditBeat }: { proposal: StructureProposal; selected: boolean; onSelect: () => void; onReorder: (proposalId: string, from: number, to: number) => void; onEditBeat: (proposalId: string, beatId: string, patch: Partial<{ label: string; summary: string; intensity: number }>) => void }) {
     const maxIntensity = Math.max(...proposal.beats.map((b) => b.intensity), 1);
     const dragIndex = useRef<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [editingBeatId, setEditingBeatId] = useState<string | null>(null);
+    const [editSummary, setEditSummary] = useState("");
+    const [editIntensity, setEditIntensity] = useState(5);
 
     // SVG 曲线坐标
     const W = 100, H = 56, PAD = 4;
@@ -170,8 +173,8 @@ function StructureCard({ proposal, selected, onSelect, onReorder }: { proposal: 
             {/* 节拍列表（可拖拽排序） */}
             <div className="mt-3 space-y-1.5">
                 {proposal.beats.map((beat, i) => (
+                    <div key={beat.id}>
                     <div
-                        key={beat.id}
                         draggable={selected}
                         onDragStart={() => handleDragStart(i)}
                         onDragOver={(e) => handleDragOver(e, i)}
@@ -187,7 +190,28 @@ function StructureCard({ proposal, selected, onSelect, onReorder }: { proposal: 
                         <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[10px] text-stone-500 dark:bg-stone-700">{beat.index + 1}</span>
                         <span className="font-medium">{beat.label}</span>
                         <span className="text-stone-500">{beat.summary}</span>
-                        {beat.proportion && <span className="ml-auto shrink-0 text-stone-400">{beat.proportion}</span>}
+                        <span className="ml-auto flex shrink-0 items-center gap-1">
+                            <span className="text-stone-400">↑{beat.intensity}</span>
+                            {beat.proportion && <span className="text-stone-400">{beat.proportion}</span>}
+                            {selected && (
+                                <button
+                                    type="button"
+                                    className="rounded p-0.5 text-stone-300 transition hover:bg-stone-200 hover:text-stone-500 dark:hover:bg-stone-700"
+                                    onClick={(e) => { e.stopPropagation(); setEditingBeatId(beat.id); setEditSummary(beat.summary); setEditIntensity(beat.intensity); }}
+                                >
+                                    <Pencil className="size-3" />
+                                </button>
+                            )}
+                        </span>
+                    </div>
+                    {editingBeatId === beat.id && (
+                        <div className="mt-1 flex items-center gap-2 px-6" onClick={(e) => e.stopPropagation()}>
+                            <Input size="small" value={editSummary} onChange={(e) => setEditSummary(e.target.value)} className="flex-1" placeholder="节拍概述" autoFocus />
+                            <InputNumber size="small" min={1} max={10} value={editIntensity} onChange={(v) => setEditIntensity(v ?? 5)} className="!w-16" />
+                            <Button size="small" type="primary" onClick={() => { onEditBeat(proposal.id, beat.id, { summary: editSummary, intensity: editIntensity }); setEditingBeatId(null); }}>保存</Button>
+                            <Button size="small" onClick={() => setEditingBeatId(null)}>取消</Button>
+                        </div>
+                    )}
                     </div>
                 ))}
             </div>

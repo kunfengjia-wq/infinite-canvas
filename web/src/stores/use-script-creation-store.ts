@@ -38,6 +38,7 @@ type ScriptCreationStore = {
     // ─── Phase 1：灵感卡片 ───
     setCards: (cards: InspirationCard[]) => void;
     toggleCard: (cardId: string) => void;
+    updateCardDescription: (cardId: string, description: string) => void;
     addCustomCard: (type: InspirationCardType, title: string, description: string) => void;
     removeCardsByType: (type: InspirationCardType) => void;
     appendCards: (cards: InspirationCard[]) => void;
@@ -51,6 +52,7 @@ type ScriptCreationStore = {
     // ─── Phase 3：结构搭建 ───
     setStructureProposals: (proposals: StructureProposal[]) => void;
     reorderBeatsInProposal: (proposalId: string, fromIndex: number, toIndex: number) => void;
+    updateBeatInProposal: (proposalId: string, beatId: string, patch: Partial<{ label: string; summary: string; intensity: number }>) => void;
     confirmStructure: (proposal: StructureProposal) => void;
 
     // ─── Phase 4：逐段创作 ───
@@ -165,6 +167,13 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
             return { current: { ...state.current, cards } };
         }),
 
+    updateCardDescription: (cardId, description) =>
+        set((state) => {
+            if (!state.current) return state;
+            const cards = state.current.cards.map((c) => (c.id === cardId ? { ...c, description } : c));
+            return { current: { ...state.current, cards } };
+        }),
+
     addCustomCard: (type, title, description) =>
         set((state) => {
             if (!state.current) return state;
@@ -246,6 +255,17 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
                 beats.splice(toIndex, 0, moved);
                 return { ...p, beats: beats.map((b, i) => ({ ...b, index: i })) };
             });
+            return { current: { ...state.current, structureProposals: proposals } };
+        }),
+
+    updateBeatInProposal: (proposalId, beatId, patch) =>
+        set((state) => {
+            if (!state.current) return state;
+            const proposals = state.current.structureProposals.map((p) =>
+                p.id === proposalId
+                    ? { ...p, beats: p.beats.map((b) => (b.id === beatId ? { ...b, ...patch } : b)) }
+                    : p,
+            );
             return { current: { ...state.current, structureProposals: proposals } };
         }),
 

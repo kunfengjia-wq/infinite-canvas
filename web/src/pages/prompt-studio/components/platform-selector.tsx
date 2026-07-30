@@ -1,8 +1,34 @@
 import { Check } from "lucide-react";
+import { useCallback } from "react";
 
 import { cn } from "@/lib/utils";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { PLATFORM_LIST, type PlatformMeta } from "@/types/prompt-studio";
+
+const RECENT_KEY = "prompt-studio:recent-platforms";
+
+function getRecentPlatforms(): string[] {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); } catch { return []; }
+}
+
+function pushRecentPlatform(id: string) {
+    const list = getRecentPlatforms().filter((p) => p !== id);
+    list.unshift(id);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10)));
+}
+
+/** 按最近使用排序 */
+function sortByRecent(platforms: PlatformMeta[]): PlatformMeta[] {
+    const recent = getRecentPlatforms();
+    return [...platforms].sort((a, b) => {
+        const ai = recent.indexOf(a.id);
+        const bi = recent.indexOf(b.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+    });
+}
 
 /**
  * 目标平台多选切换按钮（图片/视频分组，带勾选角标）
@@ -11,8 +37,13 @@ import { PLATFORM_LIST, type PlatformMeta } from "@/types/prompt-studio";
 export function PlatformSelector({ compact = false }: { compact?: boolean }) {
     const { selectedPlatforms, togglePlatform } = usePromptStudioStore();
 
-    const imagePlatforms = PLATFORM_LIST.filter((p) => p.category === "image");
-    const videoPlatforms = PLATFORM_LIST.filter((p) => p.category === "video");
+    const imagePlatforms = sortByRecent(PLATFORM_LIST.filter((p) => p.category === "image"));
+    const videoPlatforms = sortByRecent(PLATFORM_LIST.filter((p) => p.category === "video"));
+
+    const handleToggle = useCallback((id: string) => {
+        togglePlatform(id);
+        if (!selectedPlatforms.includes(id)) pushRecentPlatform(id);
+    }, [togglePlatform, selectedPlatforms]);
 
     const renderPlatformButton = (p: PlatformMeta) => {
         const isSelected = selectedPlatforms.includes(p.id);
@@ -29,7 +60,7 @@ export function PlatformSelector({ compact = false }: { compact?: boolean }) {
             <button
                 key={p.id}
                 type="button"
-                onClick={() => togglePlatform(p.id)}
+                onClick={() => handleToggle(p.id)}
                 className={cn("relative rounded-md border transition", compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm", colorClass)}
             >
                 {isSelected && <Check className={cn("absolute rounded-full bg-current p-0.5 text-white dark:text-stone-900", compact ? "-left-1 -top-1 size-3" : "-left-1 -top-1 size-3.5")} />}

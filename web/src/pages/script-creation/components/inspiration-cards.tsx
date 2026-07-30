@@ -11,11 +11,13 @@ import { cn } from "@/lib/utils";
 
 export function InspirationCards({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setCards, toggleCard, addCustomCard, removeCardsByType, appendCards, confirmCards, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setCards, toggleCard, updateCardDescription, addCustomCard, removeCardsByType, appendCards, confirmCards, saveCurrent } = useScriptCreationStore();
     const [refreshingType, setRefreshingType] = useState<InspirationCardType | null>(null);
     const [addingType, setAddingType] = useState<InspirationCardType | null>(null);
     const [customTitle, setCustomTitle] = useState("");
     const [customDesc, setCustomDesc] = useState("");
+    const [editingCardId, setEditingCardId] = useState<string | null>(null);
+    const [editText, setEditText] = useState("");
 
     if (!current) return null;
 
@@ -120,6 +122,8 @@ export function InspirationCards({ config }: { config: AiConfig }) {
                                     adding={addingType === type}
                                     customTitle={customTitle}
                                     customDesc={customDesc}
+                                    editingCardId={editingCardId}
+                                    editText={editText}
                                     onToggle={toggleCard}
                                     onRefresh={() => void handleRefreshType(type)}
                                     onStartAdd={() => { setAddingType(type); setCustomTitle(""); setCustomDesc(""); }}
@@ -127,6 +131,9 @@ export function InspirationCards({ config }: { config: AiConfig }) {
                                     onCustomTitle={setCustomTitle}
                                     onCustomDesc={setCustomDesc}
                                     onAddCustom={() => handleAddCustom(type)}
+                                    onStartEdit={(id, desc) => { setEditingCardId(id); setEditText(desc); }}
+                                    onEditChange={setEditText}
+                                    onEditSave={(id) => { updateCardDescription(id, editText); setEditingCardId(null); void saveCurrent(); }}
                                 />
                             );
                         })}
@@ -161,6 +168,8 @@ function CardGroup({
     adding,
     customTitle,
     customDesc,
+    editingCardId,
+    editText,
     onToggle,
     onRefresh,
     onStartAdd,
@@ -168,6 +177,9 @@ function CardGroup({
     onCustomTitle,
     onCustomDesc,
     onAddCustom,
+    onStartEdit,
+    onEditChange,
+    onEditSave,
 }: {
     type: InspirationCardType;
     cards: InspirationCard[];
@@ -175,6 +187,8 @@ function CardGroup({
     adding: boolean;
     customTitle: string;
     customDesc: string;
+    editingCardId: string | null;
+    editText: string;
     onToggle: (id: string) => void;
     onRefresh: () => void;
     onStartAdd: () => void;
@@ -182,6 +196,9 @@ function CardGroup({
     onCustomTitle: (v: string) => void;
     onCustomDesc: (v: string) => void;
     onAddCustom: () => void;
+    onStartEdit: (id: string, desc: string) => void;
+    onEditChange: (v: string) => void;
+    onEditSave: (id: string) => void;
 }) {
     const meta = CARD_TYPE_META[type];
     return (
@@ -224,7 +241,25 @@ function CardGroup({
                                 {card.selected && <Check className="size-3" />}
                             </span>
                         </div>
-                        <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-stone-400">{card.description}</p>
+                        <p
+                            className="mt-1 text-xs leading-5 text-stone-500 dark:text-stone-400"
+                            onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(card.id, card.description); }}
+                            title="双击编辑描述"
+                        >
+                            {editingCardId === card.id ? (
+                                <Input
+                                    size="small"
+                                    autoFocus
+                                    value={editText}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => onEditChange(e.target.value)}
+                                    onBlur={() => onEditSave(card.id)}
+                                    onPressEnter={() => onEditSave(card.id)}
+                                />
+                            ) : (
+                                card.description
+                            )}
+                        </p>
                         {card.custom && <Tag className="absolute -left-1 -top-1.5 m-0 scale-90 bg-amber-50 text-amber-600">自定义</Tag>}
                     </button>
                 ))}

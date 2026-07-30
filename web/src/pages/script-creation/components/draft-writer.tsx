@@ -146,6 +146,7 @@ export function DraftWriter({ config }: { config: AiConfig }) {
                                     {segment.status === "confirmed" ? <Check className="size-3.5" /> : segment.index + 1}
                                 </span>
                                 <span className="text-sm font-medium">{segment.title}</span>
+                                {segment.content && <span className="text-xs text-stone-400">{segment.content.length} 字</span>}
                                 {segment.rewriteCount > 0 && <span className="text-xs text-stone-400">已重写 {segment.rewriteCount} 次</span>}
                                 <div className="ml-auto flex gap-2">
                                     {segment.status === "pending" && (

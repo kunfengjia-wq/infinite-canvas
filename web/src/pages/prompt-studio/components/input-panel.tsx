@@ -75,7 +75,8 @@ export function InputPanel({ config, onError, collapsible = false }: { config: A
                     rows={4}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder={"输入画面描述、概念或从分镜工作台导入的镜头描述...\n\n示例：一个女孩站在雨中的东京街头，霓虹灯倒映在积水中，她撑着透明雨伞，回头微笑"}
+                    onKeyDown={(e) => { if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); void handleGenerate(); } }}
+                    placeholder={"输入画面描述、概念或从分镜工作台导入的镜头描述...\n\n示例：一个女孩站在雨中的东京街头，霓虹灯倒映在积水中，她撑着透明雨伞，回头微笑\n\n快捷键：Ctrl+Enter 生成"}
                     className="text-sm"
                 />
                 <div className="flex items-center gap-3">

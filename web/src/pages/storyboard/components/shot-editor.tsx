@@ -238,6 +238,11 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
 
     const totalShots = scenes.reduce((sum, s) => sum + s.shots.length, 0);
 
+    // 时间线概览统计
+    const allShotsFlat = scenes.flatMap((s) => s.shots);
+    const shotTypeDist = allShotsFlat.reduce<Record<string, number>>((acc, sh) => { acc[sh.shotType] = (acc[sh.shotType] ?? 0) + 1; return acc; }, {});
+    const totalDuration = allShotsFlat.reduce((sum, sh) => { const m = sh.duration?.match(/([\d.]+)/); return sum + (m ? parseFloat(m[1]) : 0); }, 0);
+
     return (
         <div className="mx-auto max-w-5xl">
             <div className="mb-6 flex items-center justify-between">
@@ -258,6 +263,19 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
                     </Button>
                 </div>
             </div>
+
+            {/* 时间线概览 */}
+            {totalShots > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs dark:border-stone-700 dark:bg-stone-900/50">
+                    <span className="font-medium text-stone-600 dark:text-stone-300">概览</span>
+                    <span className="text-stone-500">{scenes.length} 场景 / {totalShots} 镜头</span>
+                    {totalDuration > 0 && <span className="text-stone-500">总时长 ≈ {totalDuration.toFixed(1)}s</span>}
+                    <span className="h-3 w-px bg-stone-200 dark:bg-stone-700" />
+                    {Object.entries(shotTypeDist).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([type, count]) => (
+                        <Tag key={type} className="m-0">{type} ×{count}</Tag>
+                    ))}
+                </div>
+            )}
 
             <Collapse
                 defaultActiveKey={scenes.map((s) => s.id)}

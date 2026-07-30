@@ -1,4 +1,4 @@
-import { Copy, Download, FolderPlus } from "lucide-react";
+import { Copy, Download, FileSpreadsheet, FolderPlus } from "lucide-react";
 import { App, Button, Select, Space } from "antd";
 import { saveAs } from "file-saver";
 import { useState } from "react";
@@ -81,6 +81,20 @@ export function ExportBar() {
         saveAs(blob, `${current.title || "prompts"}.json`);
     };
 
+    const handleDownloadCsv = () => {
+        const entries = getFilteredEntries();
+        if (entries.length === 0) { message.warning("筛选后无条目"); return; }
+        const header = "平台,类型,输入,提示词,负面提示词,中文对照,评价";
+        const rows = entries.map((e) => {
+            const platform = PLATFORM_LIST.find((p) => p.id === e.platform)?.label || e.platform;
+            const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+            return [platform, e.category, esc(e.input), esc(e.prompt), esc(e.negativePrompt ?? ""), esc(e.translation ?? ""), e.rating === 1 ? "👍" : e.rating === -1 ? "👎" : ""].join(",");
+        });
+        const bom = "\uFEFF";
+        const blob = new Blob([bom + header + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+        saveAs(blob, `${current.title || "prompts"}.csv`);
+    };
+
     const handleSaveToAssets = () => {
         const entries = getFilteredEntries();
         if (entries.length === 0) { message.warning("筛选后无条目"); return; }
@@ -116,6 +130,7 @@ export function ExportBar() {
                 <Button icon={<Copy className="size-4" />} onClick={handleCopyAll}>复制</Button>
                 <Button icon={<Download className="size-4" />} onClick={handleDownloadTxt}>TXT</Button>
                 <Button icon={<Download className="size-4" />} onClick={handleDownloadJson}>JSON</Button>
+                <Button icon={<FileSpreadsheet className="size-4" />} onClick={handleDownloadCsv}>CSV</Button>
                 <Button icon={<FolderPlus className="size-4" />} onClick={handleSaveToAssets}>存入资产</Button>
                 <Button type="primary" onClick={handleSave}>保存项目</Button>
             </Space>
