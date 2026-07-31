@@ -3,11 +3,12 @@
 """
 import base64
 import json
+import traceback
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from engines.base import SynthesisRequest
@@ -29,6 +30,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# 全局异常保护：任何未捕获异常返回 500 而不是杀死服务
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(status_code=500, content={"detail": f"服务器内部错误: {type(exc).__name__}: {exc}"})
+
 # 注册引擎
 ENGINES = {}
 for engine_cls in [KokoroEngine, XTTSEngine, QwenTTSEngine, QwenCloneEngine, GPTSoVITSEngine, IndexTTSEngine]:
@@ -40,6 +48,10 @@ CLONE_ENGINE: QwenCloneEngine = ENGINES["qwen3-tts-clone"]  # type: ignore
 
 # 启动时缓存引擎可用状态（避免每次轮询都重新检测）
 ENGINE_AVAILABILITY: dict[str, bool] = {eid: engine.is_available() for eid, engine in ENGINES.items()}
+
+# 引擎启用状态（用户可控制，默认启用已部署的引擎）
+DEFAULT_ENABLED = {"kokoro-82m", "qwen3-tts", "qwen3-tts-clone"}
+ENGINE_ENABLED: dict[str, bool] = {eid: (eid in DEFAULT_ENABLED) for eid in ENGINES}
 
 
 # ─── 请求模型 ────────────────────────────────────────────────────
@@ -80,12 +92,14 @@ async def list_models():
     models = []
     for eid, engine in ENGINES.items():
         avail = ENGINE_AVAILABILITY[eid]
+        enabled = ENGINE_ENABLED[eid]
         models.append({
             "id": eid,
             "object": "model",
             "owned_by": "local",
             "display_name": engine.display_name,
             "available": avail,
+            "enabled": enabled,
             "install_hint": None if avail else INSTALL_HINTS.get(eid, ""),
             "voices": [
                 {"id": v.id, "label": v.label, "language": v.language, "gender": v.gender}
@@ -93,6 +107,25 @@ async def list_models():
             ],
         })
     return {"object": "list", "data": models}
+
+
+@app.post("/v1/models/{engine_id}/toggle")
+async def toggle_engine(engine_id: str):
+    """启用/禁用引擎"""
+    if engine_id not in ENGINE_ENABLED:
+        raise HTTPException(status_code=404, detail=f"引擎 '{engine_id}' 不存在")
+    ENGINE_ENABLED[engine_id] = not ENGINE_ENABLED[engine_id]
+    return {"id": engine_id, "enabled": ENGINE_ENABLED[engine_id]}
+
+
+@app.post("/v1/models/set")
+async def set_engines(req: Request):
+    """批量设置引擎启用状态 {"enabled": ["kokoro-82m", "qwen3-tts"]}"""
+    body = await req.json()
+    enabled_list = body.get("enabled", [])
+    for eid in ENGINE_ENABLED:
+        ENGINE_ENABLED[eid] = eid in enabled_list
+    return {"enabled": ENGINE_ENABLED}
 
 
 @app.post("/v1/models/refresh")
@@ -109,6 +142,9 @@ async def create_speech(req: SpeechRequest):
     engine = ENGINES.get(req.model)
     if not engine:
         raise HTTPException(status_code=404, detail=f"引擎 '{req.model}' 不存在。可用: {list(ENGINES.keys())}")
+
+    if not ENGINE_ENABLED.get(req.model, False):
+        raise HTTPException(status_code=403, detail=f"引擎 '{engine.display_name}' 未启用。请在前端引擎管理中开启。")
 
     if not engine.is_available():
         raise HTTPException(

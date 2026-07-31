@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Input, Upload as AntUpload } from "antd";
-import { AudioLines, FolderOpen, Music, Play, Scissors, Search, Trash2, Upload } from "lucide-react";
+import { AudioLines, Disc3, FolderOpen, Music, Play, Scissors, Search, Trash2, Upload } from "lucide-react";
 
 import { useSoundLibrary, useFilteredClips } from "../store/use-sound-library";
 import type { SoundCategory } from "../types";
@@ -10,6 +10,7 @@ const CATEGORY_TABS: { value: SoundCategory | "all"; label: string; icon: React.
     { value: "all", label: "全部", icon: <FolderOpen className="size-3" /> },
     { value: "voice", label: "音色", icon: <AudioLines className="size-3" /> },
     { value: "sfx", label: "音效", icon: <Music className="size-3" /> },
+    { value: "bgm", label: "配乐", icon: <Disc3 className="size-3" /> },
     { value: "clip", label: "片段", icon: <Scissors className="size-3" /> },
 ];
 
@@ -21,7 +22,7 @@ const CATEGORY_TABS: { value: SoundCategory | "all"; label: string; icon: React.
  * - 导入文件
  */
 export function SoundLibraryPanel() {
-    const { loadClips, addClip, removeClip, playClip, setSearch, setCategory, activeCategory, searchQuery } = useSoundLibrary();
+    const { loadClips, addClip, removeClip, playClip, stopClip, setSearch, setCategory, activeCategory, searchQuery } = useSoundLibrary();
     const clips = useFilteredClips();
     const [playingId, setPlayingId] = useState<string | null>(null);
 
@@ -31,13 +32,15 @@ export function SoundLibraryPanel() {
 
     const handlePlay = (clip: (typeof clips)[0]) => {
         if (playingId === clip.id) {
+            // 再次点击真正停止播放
+            stopClip();
             setPlayingId(null);
             return;
         }
         playClip(clip);
         setPlayingId(clip.id);
         // 简单定时清除播放状态
-        setTimeout(() => setPlayingId(null), (clip.duration || 3) * 1000);
+        setTimeout(() => setPlayingId((cur) => (cur === clip.id ? null : cur)), (clip.duration || 3) * 1000);
     };
 
     const handleImportFile = (file: File) => {
@@ -52,6 +55,7 @@ export function SoundLibraryPanel() {
                 category: "clip",
                 tags: ["导入"],
                 audioB64: b64,
+                mime: file.type || "audio/wav",
                 duration: audio.duration || 0,
             });
         };

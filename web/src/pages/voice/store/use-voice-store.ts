@@ -189,6 +189,7 @@ interface VoiceStore {
     loadProjects: () => Promise<void>;
     loadModels: () => Promise<void>;
     loadVoices: () => Promise<void>;
+    toggleEngine: (engineId: string) => Promise<void>;
     startPolling: () => void;
     stopPolling: () => void;
     createProject: (title: string, engine?: TTSEngineId) => Promise<string>;
@@ -287,6 +288,13 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
     stopPolling: () => {
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    },
+
+    toggleEngine: async (engineId: string) => {
+        try {
+            await fetch(`${getTtsBase()}/v1/models/${engineId}/toggle`, { method: "POST" });
+            await get().loadModels();
+        } catch { /* ignore */ }
     },
 
     createProject: async (title, engine = "kokoro-82m") => {
@@ -439,6 +447,13 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const refAudio = char?.referenceAudio;
         // 克隆音色自动路由到 clone 引擎
         const engine = voice.startsWith("clone_") ? "qwen3-tts-clone" : (line.engineOverride || current.engine);
+
+        // 引擎未启用时直接友好提示，不等后端 403
+        const model = get().models.find((m) => m.id === engine);
+        if (model && !model.enabled) {
+            get().updateLine(lineId, { status: "error" });
+            throw new Error(`引擎「${model.display_name}」未启用，请在顶部引擎管理中开启`);
+        }
 
         set({ generatingLineId: lineId });
         get().updateLine(lineId, { status: "generating" });

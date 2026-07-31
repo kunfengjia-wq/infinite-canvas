@@ -1,4 +1,4 @@
-import { Pause, Play, Scissors, Trash2, VolumeX } from "lucide-react";
+import { Pause, Play, Scissors } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App, Button, Tooltip } from "antd";
 
@@ -22,6 +22,7 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
     const [playing, setPlaying] = useState(false);
     const [trimming, setTrimming] = useState(false);
     const [dragging, setDragging] = useState<"start" | "end" | "region" | null>(null);
+    const dragOffsetRef = useRef(0); // region 拖拽时鼠标与选区起点的偏移
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
     // 加载音频并绘制波形
@@ -102,8 +103,10 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
 
         if (Math.abs(x - startX) < 0.02) setDragging("start");
         else if (Math.abs(x - endX) < 0.02) setDragging("end");
-        else if (x > startX && x < endX) setDragging("region");
-        else {
+        else if (x > startX && x < endX) {
+            dragOffsetRef.current = x - startX;
+            setDragging("region");
+        } else {
             // 点击空白处设置新选区起点
             setSelStart(x);
             setSelEnd(Math.min(x + 0.1, 1));
@@ -120,6 +123,13 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
 
         if (dragging === "start") setSelStart(Math.min(x, selEnd - 0.01));
         else if (dragging === "end") setSelEnd(Math.max(x, selStart + 0.01));
+        else if (dragging === "region") {
+            // 整体平移选区，保持长度不变
+            const len = selEnd - selStart;
+            const newStart = Math.max(0, Math.min(x - dragOffsetRef.current, 1 - len));
+            setSelStart(newStart);
+            setSelEnd(newStart + len);
+        }
     };
 
     const handleMouseUp = () => setDragging(null);

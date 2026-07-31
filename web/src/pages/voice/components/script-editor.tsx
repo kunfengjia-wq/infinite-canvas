@@ -88,6 +88,7 @@ export function ScriptEditor() {
                 category: "voice",
                 tags: [charName],
                 audioB64: b64,
+                mime: blob.type || "audio/mpeg",
                 duration: line.duration ?? 0,
             });
             message.success("已保存到音效库");

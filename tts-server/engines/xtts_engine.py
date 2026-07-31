@@ -42,13 +42,15 @@ class XTTSEngine(TTSEngine):
         return XTTS_VOICES
 
     async def synthesize(self, req: SynthesisRequest) -> bytes:
-        self._ensure_model()
-
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         audio_bytes = await loop.run_in_executor(
-            None, partial(self._sync_synthesize, req)
+            None, partial(self._sync_full_synthesize, req)
         )
         return audio_bytes
+
+    def _sync_full_synthesize(self, req: SynthesisRequest) -> bytes:
+        self._ensure_model()
+        return self._sync_synthesize(req)
 
     def _sync_synthesize(self, req: SynthesisRequest) -> bytes:
         import tempfile

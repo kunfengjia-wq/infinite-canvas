@@ -1,6 +1,6 @@
-import { AudioLines, Download, LoaderCircle, PanelRightClose, PanelRightOpen, Plus, Volume2, WifiOff } from "lucide-react";
+import { AudioLines, Download, LoaderCircle, PanelRightClose, PanelRightOpen, Plus, Settings2, Volume2, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { App, Button, Empty, Tabs } from "antd";
+import { App, Button, Empty, Popover, Switch, Tabs } from "antd";
 
 import { useVoiceStore } from "./store/use-voice-store";
 import { useConfigStore } from "@/stores/use-config-store";
@@ -91,21 +91,34 @@ export default function VoicePage() {
         }
     };
 
-    // 构建引擎 Tab items（只显示 ENGINE_META 中定义的 + 可用的）
-    const engineTabItems = ENGINE_META.map((meta) => {
-        const modelInfo = models.find((m) => m.id === meta.id);
-        const available = modelInfo?.available ?? false;
-        return {
-            key: meta.id,
-            label: (
-                <span className="flex items-center gap-1.5">
-                    {meta.name}
-                    {!available && <span className="size-1.5 rounded-full bg-stone-300" title="未安装" />}
-                    {available && <span className="size-1.5 rounded-full bg-emerald-400" />}
-                </span>
-            ),
-        };
-    });
+    // 构建引擎 Tab items（只显示已启用的引擎；模型列表未加载时全部显示）
+    const engineTabItems = ENGINE_META
+        .filter((meta) => {
+            if (models.length === 0) return true;
+            return models.find((m) => m.id === meta.id)?.enabled ?? false;
+        })
+        .map((meta) => {
+            const modelInfo = models.find((m) => m.id === meta.id);
+            const available = modelInfo?.available ?? false;
+            return {
+                key: meta.id,
+                label: (
+                    <span className="flex items-center gap-1.5">
+                        {meta.name}
+                        {!available && <span className="size-1.5 rounded-full bg-stone-300" title="未安装" />}
+                        {available && <span className="size-1.5 rounded-full bg-emerald-400" />}
+                    </span>
+                ),
+            };
+        });
+
+    // 当前引擎被禁用时自动回退到第一个已启用引擎
+    useEffect(() => {
+        if (engineTabItems.length > 0 && !engineTabItems.some((t) => t.key === activeEngine)) {
+            setActiveEngine(engineTabItems[0].key as TTSEngineId);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [models, activeEngine]);
 
     return (
         <div className="flex h-full overflow-hidden bg-background text-stone-800 dark:text-stone-100">
@@ -119,6 +132,33 @@ export default function VoicePage() {
                     {current && <span className="text-sm text-stone-400">{current.title}</span>}
 
                     <div className="ml-auto flex items-center gap-3">
+                        {/* 引擎管理 */}
+                        <Popover
+                            trigger="click"
+                            placement="bottomRight"
+                            title="引擎管理（按需开启）"
+                            content={
+                                <div className="w-56 space-y-2">
+                                    {models.map((m) => (
+                                        <div key={m.id} className="flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-xs font-medium">{m.display_name}</p>
+                                                <p className="text-[10px] text-stone-400">{m.available ? "已安装" : "未安装"}</p>
+                                            </div>
+                                            <Switch
+                                                size="small"
+                                                checked={m.enabled}
+                                                disabled={!m.available}
+                                                onChange={() => void useVoiceStore.getState().toggleEngine(m.id)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            }
+                        >
+                            <Button type="text" size="small" icon={<Settings2 className="size-4" />} title="引擎管理" />
+                        </Popover>
+
                         <span className={`flex items-center gap-1.5 text-xs ${ttsOnline ? "text-emerald-500" : "text-red-400"}`}>
                             <span className={`size-2 rounded-full ${ttsOnline ? "bg-emerald-500" : "bg-red-400 animate-pulse"}`} />
                             {ttsOnline ? "TTS 已连接" : "TTS 离线"}

@@ -18,6 +18,7 @@ interface SoundLibraryStore {
     setSearch: (q: string) => void;
     setCategory: (cat: SoundCategory | "all") => void;
     playClip: (clip: SoundClip) => void;
+    stopClip: () => void;
 }
 
 let currentAudio: HTMLAudioElement | null = null;
@@ -60,10 +61,15 @@ export const useSoundLibrary = create<SoundLibraryStore>()((set) => ({
 
     playClip: (clip) => {
         currentAudio?.pause();
-        const audio = new Audio(`data:audio/wav;base64,${clip.audioB64}`);
+        const audio = new Audio(`data:${clip.mime ?? "audio/wav"};base64,${clip.audioB64}`);
         audio.onended = () => { currentAudio = null; };
         void audio.play();
         currentAudio = audio;
+    },
+
+    stopClip: () => {
+        currentAudio?.pause();
+        currentAudio = null;
     },
 }));
 

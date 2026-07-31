@@ -130,6 +130,7 @@ export interface TTSModelInfo {
     id: string;
     display_name: string;
     available: boolean;
+    enabled: boolean;
     install_hint?: string | null;
     voices: { id: string; label: string; language: string; gender: string; description?: string }[];
 }
@@ -144,6 +145,7 @@ export interface SoundClip {
     category: SoundCategory;
     tags: string[];
     audioB64: string;      // 持久化用 base64
+    mime?: string;         // 音频 MIME 类型（旧数据缺省 audio/wav）
     duration: number;
     createdAt: string;
 }

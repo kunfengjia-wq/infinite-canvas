@@ -17,11 +17,23 @@ except ImportError:
     pedalboard = None
 
 
+def _load_segment(audio_bytes: bytes, format: str = "wav"):
+    """解码为 AudioSegment：声明格式解码失败时回退 ffmpeg 自动探测
+    （前端合成音频为 mp3 但调用编辑接口时默认声明 wav）
+    """
+    if AudioSegment is None:
+        raise RuntimeError("pydub 未安装")
+    try:
+        return AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    except Exception:
+        return AudioSegment.from_file(io.BytesIO(audio_bytes))
+
+
 def trim_audio(audio_bytes: bytes, start_ms: int, end_ms: int, format: str = "wav") -> bytes:
     """裁剪音频：保留 start_ms ~ end_ms 区间"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装，无法裁剪音频")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     trimmed = audio[start_ms:end_ms]
     out = io.BytesIO()
     trimmed.export(out, format=format)
@@ -32,7 +44,7 @@ def split_audio(audio_bytes: bytes, at_ms: int, format: str = "wav") -> tuple[by
     """在 at_ms 处分割音频，返回前后两段"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     part_a = audio[:at_ms]
     part_b = audio[at_ms:]
     buf_a, buf_b = io.BytesIO(), io.BytesIO()
@@ -45,7 +57,7 @@ def insert_silence(audio_bytes: bytes, at_ms: int, duration_ms: int, format: str
     """在 at_ms 处插入静音"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     silence = AudioSegment.silent(duration=duration_ms, frame_rate=audio.frame_rate)
     result = audio[:at_ms] + silence + audio[at_ms:]
     out = io.BytesIO()
@@ -57,7 +69,7 @@ def delete_region(audio_bytes: bytes, start_ms: int, end_ms: int, format: str = 
     """删除 start_ms ~ end_ms 区间"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     result = audio[:start_ms] + audio[end_ms:]
     out = io.BytesIO()
     result.export(out, format=format)
@@ -114,10 +126,16 @@ def apply_effects(
         board = Pedalboard(effects)
         data = board(data, sample_rate)
 
-    # 编码输出
+    # 编码输出（mp3 经 pydub/ffmpeg 转码，soundfile 不支持直接写 mp3）
     output_buf = io.BytesIO()
     out_data = data[0] if data.shape[0] == 1 else data.T
-    sf.write(output_buf, out_data, sample_rate, format=format.upper() if format != "mp3" else "WAV")
+    if format == "mp3" and AudioSegment is not None:
+        wav_buf = io.BytesIO()
+        sf.write(wav_buf, out_data, sample_rate, format="WAV")
+        wav_buf.seek(0)
+        AudioSegment.from_file(wav_buf, format="wav").export(output_buf, format="mp3")
+    else:
+        sf.write(output_buf, out_data, sample_rate, format="WAV" if format == "mp3" else format.upper())
     return output_buf.getvalue()
 
 
@@ -125,7 +143,7 @@ def get_audio_duration_ms(audio_bytes: bytes, format: str = "wav") -> int:
     """获取音频时长（毫秒）"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     return len(audio)
 
 
@@ -148,7 +166,7 @@ def concat_audios(audio_segments: list[bytes], silence_ms: int = 500, format: st
     silence = AudioSegment.silent(duration=silence_ms)
 
     for i, seg_bytes in enumerate(audio_segments):
-        seg = AudioSegment.from_file(io.BytesIO(seg_bytes), format=format)
+        seg = _load_segment(seg_bytes, format)
         if i > 0:
             result += silence
         result += seg
@@ -162,7 +180,7 @@ def get_waveform_data(audio_bytes: bytes, points: int = 200, format: str = "wav"
     """提取波形数据用于前端渲染（归一化到 -1 ~ 1）"""
     if AudioSegment is None:
         raise RuntimeError("pydub 未安装")
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=format)
+    audio = _load_segment(audio_bytes, format)
     samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
     if audio.channels > 1:
         samples = samples.reshape(-1, audio.channels).mean(axis=1)
