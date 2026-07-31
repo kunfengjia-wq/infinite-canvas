@@ -1,8 +1,9 @@
-import { LoaderCircle, Pause, Play, Plus, RefreshCw, Trash2, Volume2 } from "lucide-react";
+import { Bookmark, LoaderCircle, Pause, Play, Plus, RefreshCw, Trash2, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { App, Button, Input, Select, Tooltip } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useSoundLibrary } from "../store/use-sound-library";
 import { EmotionBadge } from "./emotion-selector";
 import { cn } from "@/lib/utils";
 import type { VoiceLineStatus } from "../types";
@@ -17,6 +18,7 @@ const STATUS_ICON: Record<VoiceLineStatus, React.ReactNode> = {
 export function ScriptEditor() {
     const { message } = App.useApp();
     const { current, addLine, updateLine, removeLine, generateLine, parseScript, generatingLineId } = useVoiceStore();
+    const { addClip } = useSoundLibrary();
     const [newText, setNewText] = useState("");
     const [newCharId, setNewCharId] = useState<string>("");
     const [importText, setImportText] = useState("");
@@ -66,6 +68,31 @@ export function ScriptEditor() {
             await generateLine(lineId);
         } catch (e) {
             message.error(e instanceof Error ? e.message : "生成失败");
+        }
+    };
+
+    const handleSaveToLibrary = async (lineId: string) => {
+        const line = current?.lines.find((l) => l.id === lineId);
+        if (!line?.audioUrl) return;
+        try {
+            const res = await fetch(line.audioUrl);
+            const blob = await res.blob();
+            const b64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result as string).split(",")[1]);
+                reader.readAsDataURL(blob);
+            });
+            const charName = getCharName(line.characterId);
+            await addClip({
+                name: `${charName}：${line.text.slice(0, 20)}`,
+                category: "voice",
+                tags: [charName],
+                audioB64: b64,
+                duration: line.duration ?? 0,
+            });
+            message.success("已保存到音效库");
+        } catch {
+            message.error("保存失败");
         }
     };
 
@@ -150,14 +177,24 @@ export function ScriptEditor() {
                         {/* 操作按钮 */}
                         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             {line.status === "done" && line.audioUrl && (
-                                <Tooltip title={playingId === line.id ? "停止" : "试听"}>
-                                    <Button
-                                        type="text"
-                                        size="small"
-                                        icon={playingId === line.id ? <Pause className="size-3 text-violet-500" /> : <Play className="size-3" />}
-                                        onClick={() => handlePlayLine(line.id, line.audioUrl!)}
-                                    />
-                                </Tooltip>
+                                <>
+                                    <Tooltip title={playingId === line.id ? "停止" : "试听"}>
+                                        <Button
+                                            type="text"
+                                            size="small"
+                                            icon={playingId === line.id ? <Pause className="size-3 text-violet-500" /> : <Play className="size-3" />}
+                                            onClick={() => handlePlayLine(line.id, line.audioUrl!)}
+                                        />
+                                    </Tooltip>
+                                    <Tooltip title="保存到音效库">
+                                        <Button
+                                            type="text"
+                                            size="small"
+                                            icon={<Bookmark className="size-3" />}
+                                            onClick={() => void handleSaveToLibrary(line.id)}
+                                        />
+                                    </Tooltip>
+                                </>
                             )}
                             <Tooltip title="生成语音">
                                 <Button

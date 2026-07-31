@@ -60,6 +60,7 @@ interface SynthParams {
     referenceAudio?: string;
     emotion?: string;
     emotionIntensity?: number;
+    style?: string;
     pitchShift?: number;
     reverb?: number;
     gain?: number;
@@ -75,6 +76,7 @@ async function synthesize(params: SynthParams): Promise<Blob> {
         emotion: params.emotion ?? "neutral",
         emotion_intensity: params.emotionIntensity ?? 0.5,
     };
+    if (params.style) body.style = params.style;
     if (params.referenceAudio) body.reference_audio = params.referenceAudio;
     if (params.pitchShift) body.pitch_shift = params.pitchShift;
     if (params.reverb) body.reverb = params.reverb;
@@ -425,7 +427,8 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const char = current.characters.find((c) => c.id === line.characterId);
         const voice = char?.voice ?? "Vivian";
         const refAudio = char?.referenceAudio;
-        const engine = line.engineOverride || current.engine;
+        // 克隆音色自动路由到 clone 引擎
+        const engine = voice.startsWith("clone_") ? "qwen3-tts-clone" : (line.engineOverride || current.engine);
 
         set({ generatingLineId: lineId });
         get().updateLine(lineId, { status: "generating" });
@@ -434,13 +437,14 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 engine,
                 text: line.text,
                 voice,
-                speed: 1.0,
+                speed: line.speed ?? 1.0,
                 referenceAudio: refAudio,
                 emotion: line.emotion,
                 emotionIntensity: line.emotionIntensity,
-                pitchShift: current.effects.pitchShift || undefined,
+                style: line.style,
+                pitchShift: line.pitch || current.effects.pitchShift || undefined,
                 reverb: current.effects.reverb || undefined,
-                gain: current.effects.gain || undefined,
+                gain: (line.volume != null && line.volume !== 100) ? (line.volume - 100) * 0.4 : (current.effects.gain || undefined),
             });
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);

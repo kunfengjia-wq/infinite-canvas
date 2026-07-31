@@ -4,6 +4,15 @@ export type TTSEngineId = "kokoro-82m" | "xtts-v2" | "qwen3-tts" | "qwen3-tts-cl
 
 export type EmotionType = "neutral" | "happy" | "sad" | "angry" | "surprise" | "fear" | "gentle";
 
+export type SpeakingStyle = "narration" | "dialogue" | "whisper" | "broadcast";
+
+export const STYLE_OPTIONS: { value: SpeakingStyle; label: string }[] = [
+    { value: "narration", label: "旁白" },
+    { value: "dialogue", label: "对话" },
+    { value: "whisper", label: "耳语" },
+    { value: "broadcast", label: "播报" },
+];
+
 export const EMOTION_OPTIONS: { value: EmotionType; label: string; icon: string }[] = [
     { value: "neutral", label: "平静", icon: "😐" },
     { value: "happy", label: "开心", icon: "😊" },
@@ -12,6 +21,40 @@ export const EMOTION_OPTIONS: { value: EmotionType; label: string; icon: string 
     { value: "surprise", label: "惊讶", icon: "😲" },
     { value: "fear", label: "恐惧", icon: "😨" },
     { value: "gentle", label: "温柔", icon: "🥰" },
+];
+
+// ─── 引擎元数据（场景说明 + 能力）───────────────────────────────────────
+
+export interface EngineMeta {
+    id: TTSEngineId;
+    name: string;
+    description: string;
+    tags: string[];
+    features: string[]; // "emotion" | "clone" | "speed" | "instruct" | "style"
+}
+
+export const ENGINE_META: EngineMeta[] = [
+    {
+        id: "qwen3-tts",
+        name: "Qwen3 预设音色",
+        description: "9种高品质预设音色，支持10种语言，情绪控制效果明显。适合多角色有声书、视频配音。",
+        tags: ["多角色", "中文", "情绪", "多语言"],
+        features: ["emotion", "speed", "instruct", "style"],
+    },
+    {
+        id: "qwen3-tts-clone",
+        name: "Qwen3 音色克隆",
+        description: "上传3-10秒参考音频即可克隆任意人声。适合还原特定人物声音、IP配音。",
+        tags: ["克隆", "零样本", "自定义"],
+        features: ["clone", "emotion", "speed", "style"],
+    },
+    {
+        id: "kokoro-82m",
+        name: "Kokoro 轻量",
+        description: "82M超小模型，CPU实时合成，无需GPU。适合快速预览、低延迟场景。",
+        tags: ["轻量", "CPU", "快速", "英文"],
+        features: ["speed"],
+    },
 ];
 
 export interface AudioEffects {
@@ -58,7 +101,11 @@ export interface VoiceLine {
     status: VoiceLineStatus;
     emotion: EmotionType;
     emotionIntensity: number; // 0-1
-    engineOverride?: string;  // 独立引擎覆盖（空=跟随项目）
+    speed?: number;           // 0.5 - 2.0
+    pitch?: number;           // -6 ~ +6 半音
+    volume?: number;          // 0 - 100
+    style?: SpeakingStyle;    // 说话风格
+    engineOverride?: string;
 }
 
 export interface VoiceProject {
@@ -77,7 +124,21 @@ export interface TTSModelInfo {
     display_name: string;
     available: boolean;
     install_hint?: string | null;
-    voices: { id: string; label: string; language: string; gender: string }[];
+    voices: { id: string; label: string; language: string; gender: string; description?: string }[];
+}
+
+// ─── 音效库数据模型 ────────────────────────────────────────────────────
+
+export type SoundCategory = "voice" | "sfx" | "bgm" | "clip";
+
+export interface SoundClip {
+    id: string;
+    name: string;
+    category: SoundCategory;
+    tags: string[];
+    audioB64: string;      // 持久化用 base64
+    duration: number;
+    createdAt: string;
 }
 
 // 角色颜色池

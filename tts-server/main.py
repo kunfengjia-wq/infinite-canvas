@@ -51,6 +51,7 @@ class SpeechRequest(BaseModel):
     reference_audio: str | None = Field(default=None, description="base64 参考音频")
     emotion: str = Field(default="neutral", description="情绪: neutral/happy/sad/angry/surprise/fear/gentle")
     emotion_intensity: float = Field(default=0.5, ge=0.0, le=1.0, description="情绪强度")
+    style: str = Field(default="", description="说话风格: narration/dialogue/whisper/broadcast")
     prompt_text: str | None = Field(default=None, description="参考音频对应文本")
     pitch_shift: int = Field(default=0, ge=-12, le=12, description="变调（半音）")
     reverb: float = Field(default=0.0, ge=0.0, le=1.0, description="混响")
@@ -112,6 +113,7 @@ async def create_speech(req: SpeechRequest):
         reference_audio=req.reference_audio,
         emotion=req.emotion,
         emotion_intensity=req.emotion_intensity,
+        style=req.style,
         prompt_text=req.prompt_text,
     )
 

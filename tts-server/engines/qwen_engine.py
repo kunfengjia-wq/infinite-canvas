@@ -39,10 +39,23 @@ EMOTION_INSTRUCT = {
     "gentle": "用温柔轻柔的语气说",
 }
 
+# 说话风格 -> instruct
+STYLE_INSTRUCT = {
+    "narration": "用讲述故事的语气",
+    "dialogue": "",
+    "whisper": "小声轻语",
+    "broadcast": "用播音腔，字正腔圆",
+}
 
-def _build_instruct(emotion: str, intensity: float, speed: float) -> str | None:
-    """将情绪/强度/语速合成为 instruct 指令字符串"""
+
+def _build_instruct(emotion: str, intensity: float, speed: float, style: str = "") -> str | None:
+    """将情绪/强度/语速/风格合成为 instruct 指令字符串"""
     parts: list[str] = []
+
+    # 风格部分
+    style_text = STYLE_INSTRUCT.get(style, "")
+    if style_text:
+        parts.append(style_text)
 
     # 情绪部分
     emo_text = EMOTION_INSTRUCT.get(emotion, "")
@@ -127,8 +140,8 @@ class QwenTTSEngine(TTSEngine):
         voice = req.voice if req.voice in _VOICE_LANG else "Vivian"
         language = _VOICE_LANG[voice]
 
-        # 构建 instruct 指令（情绪 + 语速）
-        instruct = _build_instruct(req.emotion, req.emotion_intensity, req.speed)
+        # 构建 instruct 指令（情绪 + 语速 + 风格）
+        instruct = _build_instruct(req.emotion, req.emotion_intensity, req.speed, req.style)
 
         # 调用官方 API
         kwargs = dict(text=req.text, speaker=voice, language=language)
