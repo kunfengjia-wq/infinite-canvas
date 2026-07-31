@@ -14,6 +14,7 @@ import { SoundLibraryPanel } from "./components/sound-library-panel";
 import { QwenPresetPanel } from "./components/engine-panels/qwen-preset-panel";
 import { QwenClonePanel } from "./components/engine-panels/qwen-clone-panel";
 import { KokoroPanel } from "./components/engine-panels/kokoro-panel";
+import { XttsPanel } from "./components/engine-panels/xtts-panel";
 import { ENGINE_META, type TTSEngineId } from "./types";
 
 export default function VoicePage() {
@@ -83,6 +84,8 @@ export default function VoicePage() {
                 return <QwenClonePanel />;
             case "kokoro-82m":
                 return <KokoroPanel modelInfo={modelInfo} />;
+            case "xtts-v2":
+                return <XttsPanel modelInfo={modelInfo} />;
             default:
                 return <QwenPresetPanel modelInfo={modelInfo} />;
         }

@@ -55,6 +55,13 @@ export const ENGINE_META: EngineMeta[] = [
         tags: ["轻量", "CPU", "快速", "英文"],
         features: ["speed"],
     },
+    {
+        id: "xtts-v2",
+        name: "XTTS-v2 克隆",
+        description: "Coqui 多语言克隆引擎，6秒参考音频即可克隆。支持17种语言跨语言合成。",
+        tags: ["克隆", "多语言", "跨语言"],
+        features: ["clone", "speed"],
+    },
 ];
 
 export interface AudioEffects {
