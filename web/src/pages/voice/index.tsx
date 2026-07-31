@@ -165,25 +165,20 @@ export default function VoicePage() {
                             新建项目
                         </Button>
                     </div>
-                ) : !ttsOnline ? (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8">
-                        <WifiOff className="size-12 text-stone-300" />
-                        <h2 className="text-base font-medium text-stone-600 dark:text-stone-300">TTS 服务未连接</h2>
-                        <p className="max-w-sm text-center text-sm text-stone-400">
-                            语音合成、音色克隆、音频效果等功能需要本地 TTS 服务支持。
-                        </p>
-                        <div className="rounded-lg bg-stone-100 px-4 py-3 font-mono text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-                            <p>cd infinite-canvas/tts-server</p>
-                            <p>pip install -r requirements.txt</p>
-                            <p>python main.py</p>
-                        </div>
-                        <p className="text-xs text-stone-400">
-                            服务地址：<span className="font-mono">{ttsBaseUrl || "http://localhost:8880"}</span>
-                        </p>
-                        <Button size="small" onClick={() => void loadModels()}>重新检测</Button>
-                    </div>
                 ) : (
-                    <div className="flex min-h-0 flex-1">
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        {/* 断连警告条（不遮挡工作区） */}
+                        {!ttsOnline && (
+                            <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+                                <WifiOff className="size-3.5 text-amber-500" />
+                                <span className="text-xs text-amber-700 dark:text-amber-300">
+                                    TTS 服务连接中断，正在自动重试…（生成功能暂停）
+                                </span>
+                                <Button size="small" type="link" className="!h-auto !p-0 text-xs" onClick={() => void loadModels()}>手动重连</Button>
+                            </div>
+                        )}
+
+                        <div className="flex min-h-0 flex-1">
                         {/* 左栏：角色管理 */}
                         <CharacterPanel />
 
@@ -238,6 +233,7 @@ export default function VoicePage() {
                                 </div>
                             </aside>
                         )}
+                    </div>
                     </div>
                 )}
             </main>

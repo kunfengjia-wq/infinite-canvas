@@ -38,6 +38,9 @@ for engine_cls in [KokoroEngine, XTTSEngine, QwenTTSEngine, QwenCloneEngine, GPT
 # 克隆引擎引用（用于克隆管理端点）
 CLONE_ENGINE: QwenCloneEngine = ENGINES["qwen3-tts-clone"]  # type: ignore
 
+# 启动时缓存引擎可用状态（避免每次轮询都重新检测）
+ENGINE_AVAILABILITY: dict[str, bool] = {eid: engine.is_available() for eid, engine in ENGINES.items()}
+
 
 # ─── 请求模型 ────────────────────────────────────────────────────
 
@@ -73,10 +76,10 @@ INSTALL_HINTS = {
 
 @app.get("/v1/models")
 async def list_models():
-    """列出可用引擎及其音色"""
+    """列出可用引擎及其音色（使用缓存状态，快速响应）"""
     models = []
     for eid, engine in ENGINES.items():
-        avail = engine.is_available()
+        avail = ENGINE_AVAILABILITY[eid]
         models.append({
             "id": eid,
             "object": "model",
@@ -90,6 +93,14 @@ async def list_models():
             ],
         })
     return {"object": "list", "data": models}
+
+
+@app.post("/v1/models/refresh")
+async def refresh_models():
+    """手动刷新引擎可用状态"""
+    global ENGINE_AVAILABILITY
+    ENGINE_AVAILABILITY = {eid: engine.is_available() for eid, engine in ENGINES.items()}
+    return {"status": "ok", "availability": ENGINE_AVAILABILITY}
 
 
 @app.post("/v1/audio/speech")

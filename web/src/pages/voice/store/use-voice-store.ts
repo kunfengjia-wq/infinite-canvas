@@ -43,7 +43,7 @@ function assertOnline(get: () => VoiceStore) {
 
 async function fetchModels(): Promise<TTSModelInfo[]> {
     try {
-        const res = await fetch(`${getTtsBase()}/v1/models`, { signal: AbortSignal.timeout(3000) });
+        const res = await fetch(`${getTtsBase()}/v1/models`, { signal: AbortSignal.timeout(6000) });
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []) as TTSModelInfo[];
@@ -244,6 +244,7 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let pollFailCount = 0;
 
 export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     projects: [],
@@ -262,7 +263,16 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
     loadModels: async () => {
         const models = await fetchModels();
-        set({ models, ttsOnline: models.length > 0 });
+        if (models.length > 0) {
+            pollFailCount = 0;
+            set({ models, ttsOnline: true });
+        } else {
+            pollFailCount++;
+            if (pollFailCount >= 3) {
+                set({ ttsOnline: false });
+            }
+            // 不清空 models，保留上次数据
+        }
     },
 
     loadVoices: async () => {
