@@ -67,11 +67,18 @@ class KokoroEngine(TTSEngine):
         voice = req.voice if req.voice in [v.id for v in KOKORO_VOICES] else "zf_xiaobei"
         speed = max(0.5, min(2.0, req.speed))
 
+        # 根据音色前缀判断语言
+        lang = "en-us"
+        if voice.startswith("zf_") or voice.startswith("zm_"):
+            lang = "cmn"
+        elif voice.startswith("jf_") or voice.startswith("jm_"):
+            lang = "ja"
+
         # kokoro_onnx 是同步的，放到线程池
         loop = asyncio.get_event_loop()
         samples, sample_rate = await loop.run_in_executor(
             None,
-            partial(self._model.create_audio, req.text, voice_id=voice, speed=speed),
+            partial(self._model.create, req.text, voice=voice, speed=speed, lang=lang),
         )
 
         # 转换为请求的格式
