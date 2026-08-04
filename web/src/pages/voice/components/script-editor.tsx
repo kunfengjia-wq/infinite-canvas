@@ -27,11 +27,15 @@ export function ScriptEditor() {
     const [playingId, setPlayingId] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    // 组件卸载时释放 Audio 元素
+    // 组件卸载时释放 Audio 元素并清理事件
     useEffect(() => {
         return () => {
-            audioRef.current?.pause();
-            audioRef.current = null;
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.onended = null;
+                audioRef.current.onerror = null;
+                audioRef.current = null;
+            }
         };
     }, []);
 

@@ -1,5 +1,5 @@
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Slider } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
@@ -16,11 +16,22 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
     const doneLines = current?.lines.filter((l) => l.status === "done" && l.audioUrl) ?? [];
     const totalDuration = doneLines.reduce((acc, l) => acc + (l.duration ?? 0), 0);
 
+    // 前缀和预计算，避免 ontimeupdate 中 O(n) reduce
+    const prefixDurations = useMemo(() => {
+        const sums = [0];
+        for (let i = 0; i < doneLines.length; i++) {
+            sums.push(sums[i] + (doneLines[i].duration ?? 0));
+        }
+        return sums;
+    }, [doneLines]);
+
     // 用 ref 存储最新值，避免闭包陈旧引用
     const doneLinesRef = useRef(doneLines);
     const totalDurationRef = useRef(totalDuration);
+    const prefixDurationsRef = useRef(prefixDurations);
     doneLinesRef.current = doneLines;
     totalDurationRef.current = totalDuration;
+    prefixDurationsRef.current = prefixDurations;
 
     // 播放当前片段
     const playAt = useCallback((idx: number) => {
@@ -43,8 +54,9 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         audio.ontimeupdate = () => {
             setCurrentTime(audio.currentTime);
             if (audio.duration) {
-                // 全局进度
-                const elapsed = lines.slice(0, idx).reduce((a, l) => a + (l.duration ?? 0), 0) + audio.currentTime;
+                // 全局进度（O(1) 前缀和查找）
+                const prefix = prefixDurationsRef.current;
+                const elapsed = (prefix[idx] ?? 0) + audio.currentTime;
                 setTotalProgress(total > 0 ? (elapsed / total) * 100 : 0);
             }
         };
@@ -79,7 +91,7 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         return `${m}:${sec.toString().padStart(2, "0")}`;
     };
 
-    const elapsed = doneLines.slice(0, currentIdx).reduce((a, l) => a + (l.duration ?? 0), 0) + currentTime;
+    const elapsed = (prefixDurations[currentIdx] ?? 0) + currentTime;
 
     return (
         <footer className="border-t border-stone-200 bg-stone-50/80 px-4 py-2.5 dark:border-stone-800 dark:bg-stone-900/40">

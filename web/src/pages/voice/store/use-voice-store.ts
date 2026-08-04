@@ -12,17 +12,52 @@ import localforage from "localforage";
 const repo = localforage.createInstance({ name: "voice-projects", storeName: "projects" });
 
 async function loadAll(): Promise<VoiceProject[]> {
-    const keys = await repo.keys();
-    const projects: VoiceProject[] = [];
-    for (const key of keys) {
-        const p = await repo.getItem<VoiceProject>(key);
-        if (p) projects.push(p);
+    try {
+        const keys = await repo.keys();
+        const projects: VoiceProject[] = [];
+        for (const key of keys) {
+            const p = await repo.getItem<any>(key);
+            if (p) {
+                // 恢复 blob URL：将持久化的 ArrayBuffer 重建为 Object URL
+                if (p.lines) {
+                    for (const line of p.lines) {
+                        if (line._audioBuffer) {
+                            const blob = new Blob([line._audioBuffer], { type: "audio/mpeg" });
+                            line.audioUrl = URL.createObjectURL(blob);
+                            delete line._audioBuffer;
+                        }
+                    }
+                }
+                projects.push(p as VoiceProject);
+            }
+        }
+        return projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    } catch (e) {
+        console.error("[voice] loadAll failed:", e);
+        return [];
     }
-    return projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 async function save(project: VoiceProject) {
-    await repo.setItem(project.id, project);
+    // 将 blob URL 转为 ArrayBuffer 以便持久化（blob: URL 是会话级别的，刷新后失效）
+    const serializable: VoiceProject = {
+        ...project,
+        lines: await Promise.all(project.lines.map(async (line) => {
+            if (!line.audioUrl?.startsWith("blob:")) return line;
+            try {
+                const res = await fetch(line.audioUrl);
+                const buffer = await res.arrayBuffer();
+                return { ...line, _audioBuffer: buffer } as any;
+            } catch {
+                return line;
+            }
+        })),
+    };
+    try {
+        await repo.setItem(project.id, serializable);
+    } catch (e) {
+        console.error("[voice] save failed:", e);
+    }
 }
 
 async function remove(id: string) {
@@ -159,7 +194,12 @@ async function apiApplyEffects(audioB64: string, effects: AudioEffects): Promise
 }
 
 /** 试听音色：用短文本合成并播放 */
+let _previewAudio: HTMLAudioElement | null = null;
 async function previewVoice(engine: string, voice: string, emotion?: string, emotionIntensity?: number): Promise<void> {
+    // 停止上一次预览
+    _previewAudio?.pause();
+    _previewAudio = null;
+
     const blob = await synthesize({
         engine,
         text: "你好，这是音色预览。今天天气真不错。",
@@ -170,7 +210,11 @@ async function previewVoice(engine: string, voice: string, emotion?: string, emo
     });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    const cleanup = () => URL.revokeObjectURL(url);
+    _previewAudio = audio;
+    const cleanup = () => {
+        URL.revokeObjectURL(url);
+        if (_previewAudio === audio) _previewAudio = null;
+    };
     audio.onended = cleanup;
     audio.onerror = cleanup;
     try {
@@ -196,6 +240,7 @@ interface VoiceStore {
     ttsOnline: boolean;
     clonedVoices: ClonedVoice[];
     generatingLineId: string | null; // 当前正在生成的行 ID
+    _generateAbort: AbortController | null;
 
     loadProjects: () => Promise<void>;
     loadModels: () => Promise<void>;
@@ -218,6 +263,7 @@ interface VoiceStore {
 
     generateLine: (lineId: string) => Promise<void>;
     generateAll: () => Promise<void>;
+    cancelGenerateAll: () => void;
     previewVoice: (engine: string, voice: string, emotion?: string, emotionIntensity?: number) => Promise<void>;
 
     // 情绪
@@ -252,6 +298,13 @@ async function urlToBase64(url: string): Promise<string> {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+// ─── 防抖持久化（用于 updateLine 等高频操作）────────────────────
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => { void useVoiceStore.getState().saveCurrent(); }, 1000);
+}
+
 export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     projects: [],
     current: null,
@@ -260,6 +313,7 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     ttsOnline: false,
     clonedVoices: [],
     generatingLineId: null,
+    _generateAbort: null,
 
     loadProjects: async () => {
         set({ loading: true });
@@ -390,6 +444,7 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
             lines: current.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)),
         };
         set({ current: updated });
+        debouncedSave(); // 1秒防抖持久化
     },
 
     removeLine: (id) => {
@@ -434,8 +489,9 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     },
 
     generateLine: async (lineId) => {
-        const { current } = get();
+        const { current, generatingLineId } = get();
         if (!current) return;
+        if (generatingLineId === lineId) return; // 同一行已在生成中
         assertOnline(get);
         const line = current.lines.find((l) => l.id === lineId);
         if (!line) return;
@@ -460,12 +516,20 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 reverb: current.effects.reverb || undefined,
                 gain: current.effects.gain || undefined,
             });
+            const url = URL.createObjectURL(blob);
             const oldLine = get().current?.lines.find((l) => l.id === lineId);
             revokeUrl(oldLine?.audioUrl);
-            const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
-            await new Promise<void>((resolve) => { audio.onloadedmetadata = () => resolve(); });
-            get().updateLine(lineId, { status: "done", audioUrl: url, duration: audio.duration });
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    audio.onloadedmetadata = () => resolve();
+                    audio.onerror = () => reject(new Error("音频加载失败"));
+                });
+                get().updateLine(lineId, { status: "done", audioUrl: url, duration: audio.duration });
+            } finally {
+                audio.onloadedmetadata = null;
+                audio.onerror = null;
+            }
         } catch (e) {
             get().updateLine(lineId, { status: "error" });
             throw e;
@@ -479,12 +543,19 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const { current } = get();
         if (!current) return;
         assertOnline(get);
+        const abort = new AbortController();
+        set({ _generateAbort: abort });
         const pending = current.lines.filter((l) => l.status === "pending" || l.status === "error");
         for (const line of pending) {
-            try {
-                await get().generateLine(line.id);
-            } catch { /* 单段失败继续 */ }
+            if (abort.signal.aborted) break;
+            try { await get().generateLine(line.id); } catch { /* 继续 */ }
         }
+        set({ _generateAbort: null });
+    },
+
+    cancelGenerateAll: () => {
+        get()._generateAbort?.abort();
+        set({ _generateAbort: null });
     },
 
     previewVoice: async (engine, voice, emotion, emotionIntensity) => {
@@ -538,11 +609,20 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const audioB64 = await urlToBase64(line.audioUrl);
         const resultB64 = await apiTrimAudio(audioB64, startMs, endMs);
         const blob = await (await fetch(`data:audio/wav;base64,${resultB64}`)).blob();
-        revokeUrl(line.audioUrl);
+        const oldUrl = line.audioUrl;
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
-        await new Promise<void>((resolve) => { audio.onloadedmetadata = () => resolve(); });
-        get().updateLine(lineId, { audioUrl: url, duration: audio.duration });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                audio.onloadedmetadata = () => resolve();
+                audio.onerror = () => reject(new Error("音频加载失败"));
+            });
+            get().updateLine(lineId, { audioUrl: url, duration: audio.duration });
+        } finally {
+            audio.onloadedmetadata = null;
+            audio.onerror = null;
+        }
+        revokeUrl(oldUrl);
         void get().saveCurrent();
     },
 
@@ -561,9 +641,13 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 const audioB64 = await urlToBase64(line.audioUrl);
                 const resultB64 = await apiApplyEffects(audioB64, effects);
                 const blob = await (await fetch(`data:audio/wav;base64,${resultB64}`)).blob();
-                revokeUrl(line.audioUrl);
+                const oldUrl = line.audioUrl;
                 const url = URL.createObjectURL(blob);
-                get().updateLine(line.id, { audioUrl: url });
+                const audio = new Audio(url);
+                await new Promise<void>((resolve) => { audio.onloadedmetadata = () => resolve(); });
+                get().updateLine(line.id, { audioUrl: url, duration: audio.duration });
+                audio.onloadedmetadata = null;
+                revokeUrl(oldUrl);
             } catch {
                 // 单段失败不阻断
             }

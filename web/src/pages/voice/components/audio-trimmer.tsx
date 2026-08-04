@@ -34,8 +34,28 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         };
     }, []);
 
+    // ResizeObserver 动态设置 canvas 尺寸
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const resize = () => {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 80 * dpr;
+            const ctx = canvas.getContext("2d");
+            ctx?.scale(dpr, dpr);
+            if (bufferRef.current) drawWaveform(bufferRef.current);
+        };
+        const observer = new ResizeObserver(resize);
+        observer.observe(canvas);
+        resize();
+        return () => observer.disconnect();
+    }, []);
+
     // 加载音频并绘制波形
     useEffect(() => {
+        bufferRef.current = null;
         let cancelled = false;
         const loadAudio = async () => {
             try {
@@ -59,7 +79,9 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const { width, height } = canvas;
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
         ctx.clearRect(0, 0, width, height);
 
         const data = buffer.getChannelData(0);
@@ -183,9 +205,7 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
             {/* 波形画布 */}
             <canvas
                 ref={canvasRef}
-                width={600}
-                height={80}
-                className="w-full cursor-crosshair rounded-lg border border-stone-200 dark:border-stone-700"
+                className="h-20 w-full cursor-crosshair rounded-lg border border-stone-200 dark:border-stone-700"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}

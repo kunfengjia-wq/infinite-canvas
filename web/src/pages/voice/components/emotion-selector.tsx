@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Slider, Tooltip } from "antd";
 import { Play, LoaderCircle } from "lucide-react";
 
@@ -10,10 +10,23 @@ import { cn } from "@/lib/utils";
 export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; emotion: EmotionType; intensity: number }) {
     const setLineEmotion = useVoiceStore((s) => s.setLineEmotion);
     const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
     const current = EMOTION_OPTIONS.find((e) => e.value === emotion) ?? EMOTION_OPTIONS[0];
 
+    // 点击外部关闭（替代 fixed overlay，不阻塞交互）
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
     return (
-        <div className="relative inline-flex">
+        <div ref={containerRef} className="relative inline-flex">
             <Tooltip title={`${current.label} ${Math.round(intensity * 100)}%`}>
                 <button
                     type="button"
@@ -25,9 +38,6 @@ export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; e
             </Tooltip>
 
             {open && (
-                <>
-                    {/* 点击外部关闭 */}
-                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
                     <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-lg border border-stone-200 bg-white p-2 shadow-lg dark:border-stone-700 dark:bg-stone-800">
                         <div className="grid grid-cols-4 gap-1">
                             {EMOTION_OPTIONS.map((opt) => (
@@ -56,7 +66,6 @@ export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; e
                             />
                         </div>
                     </div>
-                </>
             )}
         </div>
     );

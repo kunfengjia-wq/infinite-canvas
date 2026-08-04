@@ -17,15 +17,26 @@ export function VoiceClonePanel() {
     const [recording, setRecording] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
+    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
         void loadVoices();
     }, [loadVoices]);
 
+    // 组件卸载时清理录音资源
+    useEffect(() => {
+        return () => {
+            mediaRecorderRef.current?.stop();
+            streamRef.current?.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+        };
+    }, []);
+
     // 录音
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
             const recorder = new MediaRecorder(stream);
             chunksRef.current = [];
             recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };

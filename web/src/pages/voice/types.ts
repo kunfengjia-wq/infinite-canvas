@@ -44,6 +44,7 @@ export interface VoiceCharacter {
     color: string;
     referenceAudio?: string; // base64
     isCloned: boolean;       // 是否克隆音色
+    /** @deprecated 已迁移至克隆音色库管理，此字段不再使用 */
     samples: string[];       // 参考音频样本 URL 列表
 }
 

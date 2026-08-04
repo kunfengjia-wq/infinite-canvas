@@ -80,7 +80,18 @@ export default function VoicePage() {
                                 size="small"
                                 value={current.engine}
                                 onChange={(v) => {
-                                    const updated = { ...current, engine: v as TTSEngineId };
+                                    const engineId = v as TTSEngineId;
+                                    const targetModel = models.find((m) => m.id === engineId);
+                                    const validVoiceIds = new Set(targetModel?.voices.map((vv) => vv.id) ?? []);
+                                    // 校验角色音色是否在新引擎中可用，不可用则回退到引擎第一个音色
+                                    const updatedCharacters = current.characters.map((c) => {
+                                        if (c.isCloned) return c; // 克隆音色不受引擎限制
+                                        if (validVoiceIds.size > 0 && !validVoiceIds.has(c.voice)) {
+                                            return { ...c, voice: targetModel!.voices[0].id };
+                                        }
+                                        return c;
+                                    });
+                                    const updated = { ...current, engine: engineId, characters: updatedCharacters };
                                     useVoiceStore.setState({ current: updated });
                                     void useVoiceStore.getState().saveCurrent();
                                 }}
