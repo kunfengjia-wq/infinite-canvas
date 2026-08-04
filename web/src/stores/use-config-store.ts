@@ -90,6 +90,20 @@ export const defaultConfig: AiConfig = {
                 { name: "qwen3.7-flash", capability: "text" },
             ],
         },
+        {
+            id: "siliconflow",
+            name: "SiliconFlow",
+            baseUrl: SILICONFLOW_BASE_URL,
+            apiKey: "",
+            apiFormat: "siliconflow",
+            models: [
+                { name: "black-forest-labs/FLUX.1-schnell", capability: "image" },
+                { name: "black-forest-labs/FLUX.1-dev", capability: "image" },
+                { name: "black-forest-labs/FLUX.1-Kontext-dev", capability: "image" },
+                { name: "black-forest-labs/FLUX.1-Kontext-pro", capability: "image" },
+                { name: "black-forest-labs/FLUX-1.1-pro", capability: "image" },
+            ],
+        },
     ],
     model: "default::qwen-image-2.0",
     imageModel: "default::qwen-image-2.0",
@@ -227,6 +241,13 @@ export const useConfigStore = create<ConfigStore>()(
                 const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
                 const config = { ...defaultConfig, ...persistedConfig };
                 if (!Array.isArray(persistedConfig.channels)) config.channels = [];
+                // 注入缺失的默认渠道（如新增的 SiliconFlow/Flux），已有用户也能自动获取
+                if (Array.isArray(config.channels)) {
+                    const existingIds = new Set(config.channels.map((c: typeof config.channels[number]) => c.id));
+                    for (const dc of defaultConfig.channels) {
+                        if (!existingIds.has(dc.id)) config.channels.push({ ...dc });
+                    }
+                }
                 const channels = normalizeChannels(config);
                 const models = modelOptionsFromChannels(channels);
                 return {
