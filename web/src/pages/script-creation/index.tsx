@@ -18,7 +18,9 @@ export default function ScriptCreationPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const { current, loadProjects, setPhase } = useScriptCreationStore();
+    const current = useScriptCreationStore((s) => s.current);
+    const loadProjects = useScriptCreationStore((s) => s.loadProjects);
+    const setPhase = useScriptCreationStore((s) => s.setPhase);
     const [selectedModel, setSelectedModel] = useState("");
     const aiConfig = useMemo(() => (selectedModel ? { ...effectiveConfig, model: selectedModel } : effectiveConfig), [effectiveConfig, selectedModel]);
 

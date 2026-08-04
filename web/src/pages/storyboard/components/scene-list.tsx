@@ -4,13 +4,16 @@ import { App, Button, Card, Empty, Input, Popconfirm, Select, Tag } from "antd";
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiSplitScenes } from "@/services/storyboard-ai";
 import { toMoodSelectOptions } from "@/data/mood-atmosphere";
 import type { AiConfig } from "@/stores/use-config-store";
 
 export function SceneList({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setScenes, updateScene, removeScene, addScene, confirmScenes, saveCurrent } = useStoryboardStore();
+    const { current, processing, setProcessing, setScenes, updateScene, removeScene, addScene, confirmScenes, saveCurrent } = useStoryboardStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setScenes: s.setScenes, updateScene: s.updateScene, removeScene: s.removeScene, addScene: s.addScene, confirmScenes: s.confirmScenes, saveCurrent: s.saveCurrent })),
+    );
     const [splitting, setSplitting] = useState(false);
 
     if (!current) return null;

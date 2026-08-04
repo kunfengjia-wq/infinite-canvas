@@ -6,7 +6,7 @@ import { useVoiceStore } from "../store/use-voice-store";
 import { cn } from "@/lib/utils";
 
 export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) => void }) {
-    const { current } = useVoiceStore();
+    const current = useVoiceStore((s) => s.current);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [playing, setPlaying] = useState(false);
     const [currentIdx, setCurrentIdx] = useState(0);

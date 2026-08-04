@@ -6,7 +6,10 @@ import { useVoiceStore } from "../store/use-voice-store";
 
 export function VoiceClonePanel() {
     const { message } = App.useApp();
-    const { clonedVoices, loadVoices, cloneVoice, deleteClonedVoice } = useVoiceStore();
+    const clonedVoices = useVoiceStore((s) => s.clonedVoices);
+    const loadVoices = useVoiceStore((s) => s.loadVoices);
+    const cloneVoice = useVoiceStore((s) => s.cloneVoice);
+    const deleteClonedVoice = useVoiceStore((s) => s.deleteClonedVoice);
     const [name, setName] = useState("");
     const [refText, setRefText] = useState("");
     const [samples, setSamples] = useState<Blob[]>([]);

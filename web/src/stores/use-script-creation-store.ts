@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
+import { now } from "@/lib/utils";
 import { getScriptProjectRepo, preferenceRepo } from "@/services/db";
 import type {
     ScriptProject,
@@ -65,10 +66,6 @@ type ScriptCreationStore = {
     setConsistencyReport: (report: string) => void;
     completeProject: () => void;
 };
-
-function now() {
-    return new Date().toISOString();
-}
 
 export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) => ({
     projects: [],

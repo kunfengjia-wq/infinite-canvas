@@ -7,7 +7,7 @@ import { ChevronDown, Copy, FolderOpen, History, KeyRound, Link2, LoaderCircle, 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { imageMetadata } from "@/lib/canvas/canvas-node-factory";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
-import { readImageMeta } from "@/lib/image-utils";
+import { formatBytes, readImageMeta } from "@/lib/image-utils";
 import { randomId } from "@/lib/utils";
 import { uploadImage } from "@/services/image-storage";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -1283,9 +1283,6 @@ function attachmentPayloadBytes(attachments: AgentAttachment[]) {
     return attachments.reduce((total, item) => total + item.dataUrl.length, 0);
 }
 
-function formatBytes(bytes: number) {
-    return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.ceil(bytes / 1024)}KB`;
-}
 
 function isCanvasWriteTool(name: string) {
     return name === "canvas_apply_ops" || name === "canvas_create_attachment_nodes";

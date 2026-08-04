@@ -13,7 +13,7 @@ interface Props {
 /** 音频裁剪编辑器 - 波形可视化 + 裁剪/分割/静音 */
 export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
     const { message } = App.useApp();
-    const { trimAudio } = useVoiceStore();
+    const trimAudio = useVoiceStore((s) => s.trimAudio);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const bufferRef = useRef<AudioBuffer | null>(null);

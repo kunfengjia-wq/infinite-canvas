@@ -4,20 +4,8 @@
  * 用于反馈闭环：优先选取高分示例作为 few-shot
  */
 import localforage from "localforage";
+import { nanoid } from "nanoid";
 import { supabase, isRemoteSyncEnabled } from "./supabase-client";
-
-/** 兼容 HTTP 环境的 UUID 生成（crypto.randomUUID 仅 HTTPS/localhost 可用） */
-function generateId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
-    }
-    // fallback: 手动拼接 v4 UUID
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
-}
 
 export interface GenerationHistoryRecord {
     id: string;
@@ -64,7 +52,7 @@ export function recordGeneration(params: {
     qualityScore?: number;
 }): void {
     const record: GenerationHistoryRecord = {
-        id: generateId(),
+        id: nanoid(),
         project_id: params.projectId ?? null,
         skill_id: params.skillId ?? null,
         input_text: params.inputText ?? null,
@@ -108,7 +96,7 @@ export async function rateGeneration(id: string, rating: number): Promise<boolea
 
     // 后台同步
     if (isRemoteSyncEnabled()) {
-        supabase.from("generation_history").update({ user_rating: clamped }).eq("id", id).then(() => {}, () => {});
+        supabase.from("generation_history").update({ user_rating: clamped }).eq("id", id).then(() => {}, (err) => console.warn("[sync] history sync failed:", err));
     }
     return true;
 }

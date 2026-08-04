@@ -28,7 +28,9 @@ function parseDuration(d?: string): number {
 }
 
 export function StoryboardTable({ variant = "bottom", wide = false, maximized = false, onToggleMaximize, onExportToPrompt }: Props) {
-    const { current, updateShotDescription, updateShot } = useStoryboardStore();
+    const current = useStoryboardStore((s) => s.current);
+    const updateShotDescription = useStoryboardStore((s) => s.updateShotDescription);
+    const updateShot = useStoryboardStore((s) => s.updateShot);
     const copyText = useCopyText();
     const [collapsed, setCollapsed] = useState(false);
     const [search, setSearch] = useState("");

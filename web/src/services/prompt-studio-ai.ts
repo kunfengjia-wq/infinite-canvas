@@ -12,6 +12,8 @@ import { recordGeneration } from "@/services/db/history-repo";
 import { TtlCache } from "@/services/ai-utils";
 import { getPositiveExamples, getNegativeExamples } from "@/services/db/feedback-repo";
 
+const MAX_FEWSHOT_EXAMPLES = 3;
+
 // ─── Few-shot 示例（从 Supabase 数据集获取）─────────────────────
 
 /** 将提示词平台映射到数据集 platform 标识 */
@@ -57,7 +59,7 @@ async function getFewShotExamples(platform: PromptPlatform): Promise<string> {
             .select("title, prompt, negative_prompt")
             .eq("platform", datasetPlatform)
             .order("quality_score", { ascending: false })
-            .limit(3);
+            .limit(MAX_FEWSHOT_EXAMPLES);
 
         if (!data || data.length === 0) {
             fewShotCache.set(datasetPlatform, "");

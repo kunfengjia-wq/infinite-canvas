@@ -8,6 +8,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateShots, buildAssetsContext, buildProjectMetaContext } from "@/services/storyboard-ai";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { SHOT_TYPES, CAMERA_ANGLES, CAMERA_MOVEMENTS, LENS_TYPES, LIGHTING_TYPES, COMPOSITION_TYPES, TRANSITION_TYPES, toSelectOptions } from "@/data/cinematography";
@@ -31,7 +32,8 @@ function withCurrent(options: { label: string; value: string }[], current?: stri
 
 // ─── 可拖拽镜头卡片 ───
 function SortableShotCard({ shot, sceneId }: { shot: Shot; sceneId: string }) {
-    const { updateShot, removeShot } = useStoryboardStore();
+    const updateShot = useStoryboardStore((s) => s.updateShot);
+    const removeShot = useStoryboardStore((s) => s.removeShot);
     const copyText = useCopyText();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: shot.id });
 
@@ -103,7 +105,8 @@ function SortableShotCard({ shot, sceneId }: { shot: Shot; sceneId: string }) {
 
 // ─── 场景内镜头列表（可拖拽） ───
 function SortableShotList({ scene }: { scene: Scene }) {
-    const { addShot, reorderShots } = useStoryboardStore();
+    const addShot = useStoryboardStore((s) => s.addShot);
+    const reorderShots = useStoryboardStore((s) => s.reorderShots);
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -133,7 +136,9 @@ function SortableShotList({ scene }: { scene: Scene }) {
 
 export function ShotEditor({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setSceneShots, confirmShots, saveCurrent } = useStoryboardStore();
+    const { current, processing, setProcessing, setSceneShots, confirmShots, saveCurrent } = useStoryboardStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setSceneShots: s.setSceneShots, confirmShots: s.confirmShots, saveCurrent: s.saveCurrent })),
+    );
     const [generatingScene, setGeneratingScene] = useState<string | null>(null);
     const [generatingAll, setGeneratingAll] = useState(false);
     const [allProgress, setAllProgress] = useState({ done: 0, total: 0 });

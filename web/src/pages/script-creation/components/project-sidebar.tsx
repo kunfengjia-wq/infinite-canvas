@@ -3,6 +3,7 @@ import { useState } from "react";
 import { App, Button, Input, Modal, Popconfirm, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import { useShallow } from "zustand/react/shallow";
 import type { AiConfig } from "@/stores/use-config-store";
 import { CREATION_PHASES } from "@/types/script-creation";
 import { aiRefreshSeedExamples } from "@/services/script-creation-ai";
@@ -20,7 +21,9 @@ const DEFAULT_SEED_EXAMPLES = [
 
 export function ScriptProjectSidebar({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { projects, current, createProject, openProject, deleteProject, forkProject } = useScriptCreationStore();
+    const { projects, current, createProject, openProject, deleteProject, forkProject } = useScriptCreationStore(
+        useShallow((s) => ({ projects: s.projects, current: s.current, createProject: s.createProject, openProject: s.openProject, deleteProject: s.deleteProject, forkProject: s.forkProject })),
+    );
     const [creating, setCreating] = useState(false);
     const [newTitle, setNewTitle] = useState("");
     const [newSeed, setNewSeed] = useState("");

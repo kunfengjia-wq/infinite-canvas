@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { App, Button, Empty, Select, Tabs } from "antd";
 
 import { useVoiceStore } from "./store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
 import { useConfigStore } from "@/stores/use-config-store";
 import { VoiceProjectSidebar } from "./components/voice-project-sidebar";
 import { CharacterPanel } from "./components/character-panel";
@@ -17,7 +18,9 @@ import type { TTSEngineId } from "./types";
 
 export default function VoicePage() {
     const { message } = App.useApp();
-    const { current, models, ttsOnline, loadProjects, loadModels, generateAll, startPolling, stopPolling } = useVoiceStore();
+    const { current, models, ttsOnline, loadProjects, loadModels, generateAll, startPolling, stopPolling } = useVoiceStore(
+        useShallow((s) => ({ current: s.current, models: s.models, ttsOnline: s.ttsOnline, loadProjects: s.loadProjects, loadModels: s.loadModels, generateAll: s.generateAll, startPolling: s.startPolling, stopPolling: s.stopPolling })),
+    );
     const ttsBaseUrl = useConfigStore((s) => s.config.ttsBaseUrl);
     const [generatingAll, setGeneratingAll] = useState(false);
     const [exporting, setExporting] = useState(false);

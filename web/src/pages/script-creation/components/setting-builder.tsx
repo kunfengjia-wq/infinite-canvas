@@ -3,6 +3,7 @@ import { useState } from "react";
 import { App, Button, Card, Tag, Tooltip } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateSettings, aiRegenerateCharacter } from "@/services/script-creation-ai";
 import type { SettingProposal } from "@/types/script-creation";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -18,7 +19,9 @@ const ROLE_COLORS: Record<string, string> = {
 
 export function SettingBuilder({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setSettingProposals, updateCharacterInProposal, confirmSetting, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setSettingProposals, updateCharacterInProposal, confirmSetting, saveCurrent } = useScriptCreationStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setSettingProposals: s.setSettingProposals, updateCharacterInProposal: s.updateCharacterInProposal, confirmSetting: s.confirmSetting, saveCurrent: s.saveCurrent })),
+    );
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [regenCharId, setRegenCharId] = useState<string | null>(null);
 

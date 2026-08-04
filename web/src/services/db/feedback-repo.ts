@@ -4,19 +4,8 @@
  * 用于反馈闭环：点赞的提示词作为正面示例注入生成，劣质的作为规避指令
  */
 import localforage from "localforage";
+import { nanoid } from "nanoid";
 import { supabase, isRemoteSyncEnabled } from "./supabase-client";
-
-/** 兼容 HTTP 环境的 UUID 生成 */
-function generateId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
-    }
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
-}
 
 export interface PromptFeedbackRecord {
     id: string;
@@ -63,7 +52,7 @@ export function submitFeedback(params: {
     rating: 1 | -1;
 }): void {
     const record: PromptFeedbackRecord = {
-        id: generateId(),
+        id: nanoid(),
         prompt: params.prompt,
         negative_prompt: params.negativePrompt ?? undefined,
         platform: params.platform,

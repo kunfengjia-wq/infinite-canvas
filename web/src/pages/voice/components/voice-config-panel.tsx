@@ -11,7 +11,10 @@ interface Props {
 
 export function VoiceConfigPanel({ models }: Props) {
     const { message } = App.useApp();
-    const { current, updateCharacter, previewVoice, clonedVoices } = useVoiceStore();
+    const current = useVoiceStore((s) => s.current);
+    const updateCharacter = useVoiceStore((s) => s.updateCharacter);
+    const previewVoice = useVoiceStore((s) => s.previewVoice);
+    const clonedVoices = useVoiceStore((s) => s.clonedVoices);
     const [previewingId, setPreviewingId] = useState<string | null>(null);
 
     if (!current) return null;

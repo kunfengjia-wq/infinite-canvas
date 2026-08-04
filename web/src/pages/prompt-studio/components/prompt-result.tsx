@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils";
 export function PromptResult({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
     const { message } = App.useApp();
     const copyText = useCopyText();
-    const { current, updateEntry, removeEntry } = usePromptStudioStore();
+    const current = usePromptStudioStore((s) => s.current);
+    const updateEntry = usePromptStudioStore((s) => s.updateEntry);
+    const removeEntry = usePromptStudioStore((s) => s.removeEntry);
     const [filterCategory, setFilterCategory] = useState<PromptCategory | "all">("all");
     const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
     const [streamingText, setStreamingText] = useState<Record<string, string>>({});

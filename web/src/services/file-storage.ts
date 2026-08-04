@@ -5,11 +5,23 @@ export type UploadedFile = { url: string; storageKey: string; bytes: number; mim
 
 const store = localforage.createInstance({ name: "infinite-canvas", storeName: "media_files" });
 const objectUrls = new Map<string, string>();
+const MAX_OBJECT_URLS = 200;
+
+function evictOldestObjectUrl() {
+    if (objectUrls.size >= MAX_OBJECT_URLS) {
+        const firstKey = objectUrls.keys().next().value;
+        if (firstKey) {
+            URL.revokeObjectURL(objectUrls.get(firstKey)!);
+            objectUrls.delete(firstKey);
+        }
+    }
+}
 
 export async function uploadMediaFile(input: string | Blob, prefix = "file"): Promise<UploadedFile> {
     const blob = typeof input === "string" ? await (await fetch(input)).blob() : input;
     const storageKey = `${prefix}:${nanoid()}`;
     await store.setItem(storageKey, blob);
+    evictOldestObjectUrl();
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
     const meta = blob.type.startsWith("video/") ? await readVideoMeta(url) : blob.type.startsWith("audio/") ? await readAudioMeta(url) : {};
@@ -22,6 +34,7 @@ export async function resolveMediaUrl(storageKey?: string, fallback = "") {
     if (cached) return cached;
     const blob = await store.getItem<Blob>(storageKey);
     if (!blob) return fallback;
+    evictOldestObjectUrl();
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
     return url;
@@ -33,6 +46,7 @@ export async function getMediaBlob(storageKey: string) {
 
 export async function setMediaBlob(storageKey: string, blob: Blob) {
     await store.setItem(storageKey, blob);
+    evictOldestObjectUrl();
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
     return url;

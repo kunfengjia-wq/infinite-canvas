@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
+import { now } from "@/lib/utils";
 import { getPromptProjectRepo } from "@/services/db";
 import type { PromptEntry, PromptPlatform, PromptProject } from "@/types/prompt-studio";
 
@@ -50,10 +51,6 @@ type PromptStudioStore = {
     clearStyles: () => void;
     setGenerating: (v: boolean) => void;
 };
-
-function now() {
-    return new Date().toISOString();
-}
 
 export const usePromptStudioStore = create<PromptStudioStore>()((set, get) => ({
     projects: [],

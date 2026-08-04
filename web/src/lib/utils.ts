@@ -16,3 +16,7 @@ export function cn(...inputs: ClassValue[]) {
 export function randomId(): string {
     return nanoid();
 }
+
+export function now(): string {
+    return new Date().toISOString();
+}

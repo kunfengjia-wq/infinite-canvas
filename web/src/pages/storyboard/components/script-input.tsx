@@ -1,9 +1,6 @@
 import { ChevronDown, FileText, FileUp, LoaderCircle, Settings2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { App, Button, Collapse, Input, InputNumber, Select, Upload } from "antd";
-import mammoth from "mammoth";
-import * as pdfjsLib from "pdfjs-dist";
-
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
 import { aiGenerateScript } from "@/services/storyboard-ai";
 import { PROJECT_TYPES, toSelectOptions } from "@/data/cinematography";
@@ -11,13 +8,11 @@ import { toGroupedSelectOptions } from "@/data/visual-styles";
 import { PLATFORM_LIST } from "@/types/prompt-studio";
 import type { AiConfig } from "@/stores/use-config-store";
 
-// 配置 PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-
 const ACCEPT_TYPES = ".txt,.md,.text,.docx,.doc,.pdf,.rtf";
 
 /** 解析 .docx 文件为纯文本 */
 async function parseDocx(file: File): Promise<string> {
+    const { default: mammoth } = await import("mammoth");
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
     return result.value;
@@ -25,6 +20,8 @@ async function parseDocx(file: File): Promise<string> {
 
 /** 解析 .pdf 文件为纯文本 */
 async function parsePdf(file: File): Promise<string> {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const pages: string[] = [];
@@ -67,7 +64,9 @@ export function ScriptInput({ config }: { config: AiConfig }) {
     const [targetDuration, setTargetDuration] = useState<number | null>(null);
     const [visualStyle, setVisualStyle] = useState<string | undefined>(undefined);
     const [targetPlatform, setTargetPlatform] = useState<string | undefined>(undefined);
-    const { createProject, setStep, current } = useStoryboardStore();
+    const createProject = useStoryboardStore((s) => s.createProject);
+    const setStep = useStoryboardStore((s) => s.setStep);
+    const current = useStoryboardStore((s) => s.current);
 
     const projectTypeOptions = toSelectOptions(PROJECT_TYPES);
     const styleOptions = toGroupedSelectOptions();

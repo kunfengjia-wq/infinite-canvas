@@ -2,6 +2,7 @@ import { Clapperboard, FolderOpen, Plus, Trash2 } from "lucide-react";
 import { App, Button, Empty, Popconfirm, Spin } from "antd";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useShallow } from "zustand/react/shallow";
 import type { StoryboardStatus } from "@/types/storyboard";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,9 @@ const STATUS_LABEL: Record<StoryboardStatus, { text: string; color: string }> = 
 
 export function ProjectSidebar() {
     const { message } = App.useApp();
-    const { projects, current, loading, openProject, deleteProject } = useStoryboardStore();
+    const { projects, current, loading, openProject, deleteProject } = useStoryboardStore(
+        useShallow((s) => ({ projects: s.projects, current: s.current, loading: s.loading, openProject: s.openProject, deleteProject: s.deleteProject })),
+    );
 
     return (
         <aside className="flex w-60 shrink-0 flex-col border-r border-stone-200 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/50">

@@ -2,6 +2,7 @@ import { GitBranch, LoaderCircle, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Tooltip } from "antd";
 
+import { nanoid } from "nanoid";
 import { aiDivergeFromBubble } from "@/services/script-creation-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -38,9 +39,6 @@ const GEN_SIZE: Record<number, "sm" | "md" | "lg"> = { 0: "lg", 1: "md", 2: "sm"
 
 function randomColor() {
     return BUBBLE_COLORS[Math.floor(Math.random() * BUBBLE_COLORS.length)];
-}
-function genId() {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 // ─── 组件 ────────────────────────────────────────────────────────
@@ -105,7 +103,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
             const existing = bubblesRef.current.map((b) => b.text);
             const results = await aiDivergeFromBubble(config, seed.trim(), seed.trim(), existing);
             const newBubbles: Bubble[] = results.map((text, i) => ({
-                id: genId(),
+                id: nanoid(),
                 text: text.length > 6 ? text.slice(0, 6) : text,
                 x: 20 + (i % 3) * 25 + Math.random() * 10,
                 y: 20 + Math.floor(i / 3) * 30 + Math.random() * 10,
@@ -133,7 +131,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
                 const angle = (i / results.length) * Math.PI * 2 + Math.random() * 0.5;
                 const dist = 12 + Math.random() * 8;
                 return {
-                    id: genId(),
+                    id: nanoid(),
                     text: text.length > 6 ? text.slice(0, 6) : text,
                     x: Math.max(8, Math.min(92, bubble.x + Math.cos(angle) * dist)),
                     y: Math.max(8, Math.min(88, bubble.y + Math.sin(angle) * dist)),
@@ -191,7 +189,7 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         const text = prompt("输入一个灵感关键词：");
         if (!text?.trim()) return;
-        const newBubble: Bubble = { id: genId(), text: text.trim().slice(0, 6), x, y, color: randomColor(), size: "md", vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, generation: 0 };
+        const newBubble: Bubble = { id: nanoid(), text: text.trim().slice(0, 6), x, y, color: randomColor(), size: "md", vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, generation: 0 };
         const updated = [...bubblesRef.current, newBubble];
         bubblesRef.current = updated;
         setBubbles(updated);

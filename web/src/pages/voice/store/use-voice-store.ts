@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import type { VoiceProject, VoiceCharacter, VoiceLine, TTSEngineId, TTSModelInfo, EmotionType, AudioEffects } from "../types";
 import { CHARACTER_COLORS, DEFAULT_EFFECTS } from "../types";
 import { useConfigStore } from "@/stores/use-config-store";
+import { now } from "@/lib/utils";
 
 // ─── 本地持久化（localforage）────────────────────────────────────
 import localforage from "localforage";
@@ -233,10 +234,6 @@ interface VoiceStore {
 
     // 导出
     exportAll: (format?: string, silenceMs?: number) => Promise<void>;
-}
-
-function now() {
-    return new Date().toISOString();
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {

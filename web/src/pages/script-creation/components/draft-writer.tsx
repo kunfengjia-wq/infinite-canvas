@@ -3,13 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Input } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateSegment, aiRewriteSegment, aiSummarizeContext } from "@/services/script-creation-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import { cn } from "@/lib/utils";
 
 export function DraftWriter({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, updateSegment, setContextSummary, completeProject, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, updateSegment, setContextSummary, completeProject, saveCurrent } = useScriptCreationStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, updateSegment: s.updateSegment, setContextSummary: s.setContextSummary, completeProject: s.completeProject, saveCurrent: s.saveCurrent })),
+    );
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [rewriteInstruction, setRewriteInstruction] = useState("");
     const [rewritingId, setRewritingId] = useState<string | null>(null);

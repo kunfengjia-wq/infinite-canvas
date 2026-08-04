@@ -3,6 +3,7 @@ import { useState } from "react";
 import { App, Button, Input, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateInspirationCards, aiRefreshCardsByType } from "@/services/script-creation-ai";
 import { CARD_TYPE_META, CARD_TYPE_ORDER } from "@/types/script-creation";
 import type { InspirationCard, InspirationCardType } from "@/types/script-creation";
@@ -11,7 +12,9 @@ import { cn } from "@/lib/utils";
 
 export function InspirationCards({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setCards, toggleCard, updateCardDescription, addCustomCard, removeCardsByType, appendCards, confirmCards, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setCards, toggleCard, updateCardDescription, addCustomCard, removeCardsByType, appendCards, confirmCards, saveCurrent } = useScriptCreationStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setCards: s.setCards, toggleCard: s.toggleCard, updateCardDescription: s.updateCardDescription, addCustomCard: s.addCustomCard, removeCardsByType: s.removeCardsByType, appendCards: s.appendCards, confirmCards: s.confirmCards, saveCurrent: s.saveCurrent })),
+    );
     const [refreshingType, setRefreshingType] = useState<InspirationCardType | null>(null);
     const [addingType, setAddingType] = useState<InspirationCardType | null>(null);
     const [customTitle, setCustomTitle] = useState("");

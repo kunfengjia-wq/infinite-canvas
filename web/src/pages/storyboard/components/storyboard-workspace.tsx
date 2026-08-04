@@ -23,7 +23,11 @@ function getPanelMax(): number {
 
 export function StoryboardWorkspace({ config, onExportToPrompt }: { config: AiConfig; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
-    const { current, step, maxStep, setStep, formResetKey } = useStoryboardStore();
+    const current = useStoryboardStore((s) => s.current);
+    const step = useStoryboardStore((s) => s.step);
+    const maxStep = useStoryboardStore((s) => s.maxStep);
+    const setStep = useStoryboardStore((s) => s.setStep);
+    const formResetKey = useStoryboardStore((s) => s.formResetKey);
     const [tableOpen, setTableOpen] = useState(true);
     const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
     const [maximized, setMaximized] = useState(false);

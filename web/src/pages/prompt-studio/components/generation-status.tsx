@@ -20,7 +20,7 @@ type PlatformStatus = {
  * 解决「前端可选但看不见后端状态」的问题。
  */
 export function GenerationStatus({ config }: { config: AiConfig }) {
-    const { selectedPlatforms } = usePromptStudioStore();
+    const selectedPlatforms = usePromptStudioStore((s) => s.selectedPlatforms);
     const [statuses, setStatuses] = useState<PlatformStatus[]>([]);
 
     useEffect(() => {

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 /** 单段情绪选择器（内联在台词行中） */
 export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; emotion: EmotionType; intensity: number }) {
-    const { setLineEmotion } = useVoiceStore();
+    const setLineEmotion = useVoiceStore((s) => s.setLineEmotion);
     const [open, setOpen] = useState(false);
     const current = EMOTION_OPTIONS.find((e) => e.value === emotion) ?? EMOTION_OPTIONS[0];
 
@@ -64,7 +64,9 @@ export function EmotionBadge({ lineId, emotion, intensity }: { lineId: string; e
 
 /** 批量情绪设置面板（右栏 Tab 中使用） */
 export function EmotionBatchPanel() {
-    const { current, batchSetEmotion, previewVoice } = useVoiceStore();
+    const current = useVoiceStore((s) => s.current);
+    const batchSetEmotion = useVoiceStore((s) => s.batchSetEmotion);
+    const previewVoice = useVoiceStore((s) => s.previewVoice);
     const [emotion, setEmotion] = useState<EmotionType>("neutral");
     const [intensity, setIntensity] = useState(50);
     const [previewing, setPreviewing] = useState(false);

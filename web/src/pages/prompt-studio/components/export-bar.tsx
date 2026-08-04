@@ -17,7 +17,8 @@ export function ExportBar() {
     const { message } = App.useApp();
     const copyText = useCopyText();
     const addAsset = useAssetStore((state) => state.addAsset);
-    const { current, saveCurrent } = usePromptStudioStore();
+    const current = usePromptStudioStore((s) => s.current);
+    const saveCurrent = usePromptStudioStore((s) => s.saveCurrent);
     const [filterPlatform, setFilterPlatform] = useState<string>("all");
     const [filterRating, setFilterRating] = useState<string>("all");
 
@@ -88,7 +89,7 @@ export function ExportBar() {
         const rows = entries.map((e) => {
             const platform = PLATFORM_LIST.find((p) => p.id === e.platform)?.label || e.platform;
             const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
-            return [platform, e.category, esc(e.input), esc(e.prompt), esc(e.negativePrompt ?? ""), esc(e.translation ?? ""), e.rating === 1 ? "👍" : e.rating === -1 ? "👎" : ""].join(",");
+            return [platform, e.category, esc(e.input), esc(e.prompt), esc(e.negativePrompt ?? ""), esc(e.translation ?? ""), e.rating === 1 ? "正面" : e.rating === -1 ? "负面" : ""].join(",");
         });
         const bom = "\uFEFF";
         const blob = new Blob([bom + header + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });

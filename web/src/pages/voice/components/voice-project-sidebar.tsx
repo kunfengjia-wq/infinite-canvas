@@ -2,10 +2,13 @@ import { Plus, Trash2, AudioLines } from "lucide-react";
 import { Button, Popconfirm } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
 
 export function VoiceProjectSidebar() {
-    const { projects, current, loading, createProject, openProject, deleteProject } = useVoiceStore();
+    const { projects, current, loading, createProject, openProject, deleteProject } = useVoiceStore(
+        useShallow((s) => ({ projects: s.projects, current: s.current, loading: s.loading, createProject: s.createProject, openProject: s.openProject, deleteProject: s.deleteProject })),
+    );
 
     return (
         <aside className="flex w-56 shrink-0 flex-col border-r border-stone-200 bg-stone-50/50 dark:border-stone-800 dark:bg-stone-900/30">

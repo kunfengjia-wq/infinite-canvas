@@ -3,6 +3,7 @@ import { useState } from "react";
 import { App, Button, Input, Select } from "antd";
 
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGeneratePrompt } from "@/services/prompt-studio-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import { PROMPT_CATEGORIES, type PromptCategory } from "@/types/prompt-studio";
@@ -13,7 +14,9 @@ import { PROMPT_CATEGORIES, type PromptCategory } from "@/types/prompt-studio";
  */
 export function InputPanel({ config, onError, collapsible = false }: { config: AiConfig; onError: (msg: string) => void; collapsible?: boolean }) {
     const { message } = App.useApp();
-    const { selectedPlatform, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
+    const { selectedPlatform, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore(
+        useShallow((s) => ({ selectedPlatform: s.selectedPlatform, selectedStyles: s.selectedStyles, customStyle: s.customStyle, generating: s.generating, setGenerating: s.setGenerating, addEntry: s.addEntry, current: s.current, createProject: s.createProject })),
+    );
     const [input, setInput] = useState("");
     const [category, setCategory] = useState<PromptCategory>("general");
     const [streamText, setStreamText] = useState("");

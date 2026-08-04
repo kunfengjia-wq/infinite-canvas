@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Input, Select, Tooltip } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
 import { EmotionBadge } from "./emotion-selector";
 import { cn } from "@/lib/utils";
 import type { VoiceLineStatus } from "../types";
@@ -16,7 +17,9 @@ const STATUS_ICON: Record<VoiceLineStatus, React.ReactNode> = {
 
 export function ScriptEditor() {
     const { message } = App.useApp();
-    const { current, addLine, updateLine, removeLine, generateLine, parseScript, generatingLineId } = useVoiceStore();
+    const { current, addLine, updateLine, removeLine, generateLine, parseScript, generatingLineId } = useVoiceStore(
+        useShallow((s) => ({ current: s.current, addLine: s.addLine, updateLine: s.updateLine, removeLine: s.removeLine, generateLine: s.generateLine, parseScript: s.parseScript, generatingLineId: s.generatingLineId })),
+    );
     const [newText, setNewText] = useState("");
     const [newCharId, setNewCharId] = useState<string>("");
     const [importText, setImportText] = useState("");

@@ -4,13 +4,16 @@ import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd
 import { nanoid } from "nanoid";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiExtractAssets, aiRegenerateAsset } from "@/services/storyboard-ai";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CharacterAsset, LocationAsset, ProductAsset, PropAsset } from "@/types/storyboard";
 
 export function AssetExtraction({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
+    const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setAssets: s.setAssets, confirmAssets: s.confirmAssets, saveCurrent: s.saveCurrent })),
+    );
     const [extracting, setExtracting] = useState(false);
     const [regenId, setRegenId] = useState<string | null>(null);
     const abortRef = useRef(new AbortController());

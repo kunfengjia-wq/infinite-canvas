@@ -73,7 +73,7 @@ export function createSyncRepo<T extends { id: string; updatedAt: string }>(
                     if (!localItem || new Date(remoteItem.updatedAt) > new Date(localItem.updatedAt)) {
                         merged.set(remoteItem.id, remoteItem);
                         // 同步到本地
-                        local.save(remoteItem).catch(() => {});
+                        local.save(remoteItem).catch((err) => console.warn("[sync] save failed:", err));
                     }
                 }
 
@@ -101,13 +101,13 @@ export function createSyncRepo<T extends { id: string; updatedAt: string }>(
             await local.save(item);
             // 后台同步远程（不阻塞）
             if (isRemoteSyncEnabled()) {
-                remote.save(item).catch(() => { /* 静默失败，下次再同步 */ });
+                remote.save(item).catch((err) => console.warn("[sync] save failed:", err));
             }
         },
         async remove(id) {
             await local.remove(id);
             if (isRemoteSyncEnabled()) {
-                remote.remove(id).catch(() => {});
+                remote.remove(id).catch((err) => console.warn("[sync] remove failed:", err));
             }
         },
     };

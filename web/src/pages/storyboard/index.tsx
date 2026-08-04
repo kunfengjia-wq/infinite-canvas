@@ -15,7 +15,8 @@ export default function StoryboardPage() {
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const { current, loadProjects } = useStoryboardStore();
+    const current = useStoryboardStore((s) => s.current);
+    const loadProjects = useStoryboardStore((s) => s.loadProjects);
     const [selectedModel, setSelectedModel] = useState("");
     const aiConfig = useMemo(() => (selectedModel ? { ...effectiveConfig, model: selectedModel } : effectiveConfig), [effectiveConfig, selectedModel]);
 

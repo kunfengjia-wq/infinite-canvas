@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Checkbox, Collapse, Input, Progress, Select, Tag } from "antd";
 
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGeneratePrompt } from "@/services/prompt-studio-ai";
 import { getStoryboardRepo } from "@/services/db";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -97,7 +98,9 @@ function buildGroups(project: StoryboardProject | null, filter: (sh: Shot) => bo
  */
 export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sourceTab }: Props) {
     const { message } = App.useApp();
-    const { selectedPlatforms, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore();
+    const { selectedPlatforms, selectedStyles, customStyle, generating, setGenerating, addEntry, current, createProject } = usePromptStudioStore(
+        useShallow((s) => ({ selectedPlatforms: s.selectedPlatforms, selectedStyles: s.selectedStyles, customStyle: s.customStyle, generating: s.generating, setGenerating: s.setGenerating, addEntry: s.addEntry, current: s.current, createProject: s.createProject })),
+    );
 
     const [projects, setProjects] = useState<StoryboardProject[]>([]);
     const [selectedId, setSelectedId] = useState<string>("");

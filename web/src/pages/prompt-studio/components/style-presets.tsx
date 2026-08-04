@@ -4,6 +4,7 @@ import { Edit3, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
+import { useShallow } from "zustand/react/shallow";
 import { PLATFORM_LIST, STYLE_PRESETS } from "@/types/prompt-studio";
 
 /**
@@ -12,7 +13,9 @@ import { PLATFORM_LIST, STYLE_PRESETS } from "@/types/prompt-studio";
  * compact 用于双栏工作台顶部紧凑工具条
  */
 export function StylePresets({ compact = false }: { compact?: boolean }) {
-    const { selectedStyles, customStyle, toggleStyle, setStyleWeight, setCustomStyle, clearStyles, selectedPlatforms } = usePromptStudioStore();
+    const { selectedStyles, customStyle, toggleStyle, setStyleWeight, setCustomStyle, clearStyles, selectedPlatforms } = usePromptStudioStore(
+        useShallow((s) => ({ selectedStyles: s.selectedStyles, customStyle: s.customStyle, toggleStyle: s.toggleStyle, setStyleWeight: s.setStyleWeight, setCustomStyle: s.setCustomStyle, clearStyles: s.clearStyles, selectedPlatforms: s.selectedPlatforms })),
+    );
     const [showCustom, setShowCustom] = useState(false);
 
     // 依据所选平台类型计算媒体过滤

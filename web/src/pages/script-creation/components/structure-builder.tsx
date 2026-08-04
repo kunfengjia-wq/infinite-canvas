@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { App, Button, Input, InputNumber, Tag } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateStructures } from "@/services/script-creation-ai";
 import type { StructureProposal } from "@/types/script-creation";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -18,7 +19,9 @@ const STRUCTURE_COLORS: Record<string, string> = {
 
 export function StructureBuilder({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
-    const { current, processing, setProcessing, setStructureProposals, reorderBeatsInProposal, updateBeatInProposal, confirmStructure, saveCurrent } = useScriptCreationStore();
+    const { current, processing, setProcessing, setStructureProposals, reorderBeatsInProposal, updateBeatInProposal, confirmStructure, saveCurrent } = useScriptCreationStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, setStructureProposals: s.setStructureProposals, reorderBeatsInProposal: s.reorderBeatsInProposal, updateBeatInProposal: s.updateBeatInProposal, confirmStructure: s.confirmStructure, saveCurrent: s.saveCurrent })),
+    );
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     if (!current) return null;

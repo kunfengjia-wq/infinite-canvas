@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Card, Collapse, Empty, Input, Progress, Tag, Tooltip } from "antd";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
+import { useShallow } from "zustand/react/shallow";
 import { aiGenerateVisualDescription, buildAssetsContext } from "@/services/storyboard-ai";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -11,7 +12,9 @@ import type { Scene, Shot } from "@/types/storyboard";
 export function DescriptionReview({ config, onError, onExportToPrompt }: { config: AiConfig; onError: (msg: string) => void; onExportToPrompt?: (storyboardId: string, tab?: "visual" | "storyboard" | "asset") => void }) {
     const { message } = App.useApp();
     const copyText = useCopyText();
-    const { current, processing, setProcessing, updateShotDescription, confirmDescriptions, saveCurrent } = useStoryboardStore();
+    const { current, processing, setProcessing, updateShotDescription, confirmDescriptions, saveCurrent } = useStoryboardStore(
+        useShallow((s) => ({ current: s.current, processing: s.processing, setProcessing: s.setProcessing, updateShotDescription: s.updateShotDescription, confirmDescriptions: s.confirmDescriptions, saveCurrent: s.saveCurrent })),
+    );
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [batchGenerating, setBatchGenerating] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });

@@ -5,6 +5,7 @@ import { App, Button, Popconfirm, Select } from "antd";
 import type { AiConfig } from "@/stores/use-config-store";
 import { getStoryboardRepo } from "@/services/db";
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
+import { useShallow } from "zustand/react/shallow";
 import { InputPanel } from "@/pages/prompt-studio/components/input-panel";
 import { PlatformSelector } from "@/pages/prompt-studio/components/platform-selector";
 import { PromptResult } from "@/pages/prompt-studio/components/prompt-result";
@@ -28,7 +29,9 @@ function getPanelMax(): number {
  */
 export function PromptWorkspace({ config, sourceStoryboardId, sourceTab }: { config: AiConfig; sourceStoryboardId?: string | null; sourceTab?: "visual" | "storyboard" | "asset" }) {
     const { message } = App.useApp();
-    const { projects, current, loading, loadProjects, createProject, openProject, deleteProject } = usePromptStudioStore();
+    const { projects, current, loading, loadProjects, createProject, openProject, deleteProject } = usePromptStudioStore(
+        useShallow((s) => ({ projects: s.projects, current: s.current, loading: s.loading, loadProjects: s.loadProjects, createProject: s.createProject, openProject: s.openProject, deleteProject: s.deleteProject })),
+    );
     const [hasStoryboard, setHasStoryboard] = useState(Boolean(sourceStoryboardId));
 
     // ─── 左栏宽度拖拽 + 折叠（活动页） ───

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
+import { now } from "@/lib/utils";
 import { getStoryboardRepo } from "@/services/db";
 import { useUndoStore } from "@/stores/use-undo-store";
 import type { Scene, Shot, StoryAssets, StoryboardProject, StoryboardStatus, StoryboardStep } from "@/types/storyboard";
@@ -55,10 +56,6 @@ type StoryboardStore = {
     updateShotDescription: (sceneId: string, shotId: string, description: string) => void;
     confirmDescriptions: () => void;
 };
-
-function now() {
-    return new Date().toISOString();
-}
 
 function createEmptyProject(title: string, script: string): StoryboardProject {
     return { id: nanoid(), title, script, assets: { characters: [], locations: [], props: [], products: [] }, scenes: [], status: "draft", createdAt: now(), updatedAt: now() };

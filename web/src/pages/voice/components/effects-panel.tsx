@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 export function EffectsPanel() {
     const { message } = App.useApp();
-    const { current, applyEffects } = useVoiceStore();
+    const current = useVoiceStore((s) => s.current);
+    const applyEffects = useVoiceStore((s) => s.applyEffects);
     const [effects, setEffects] = useState<AudioEffects>({ ...DEFAULT_EFFECTS });
     const [applying, setApplying] = useState(false);
     const [activePreset, setActivePreset] = useState<string | null>(null);

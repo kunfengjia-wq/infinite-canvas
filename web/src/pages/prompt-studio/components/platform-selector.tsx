@@ -6,6 +6,7 @@ import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
 import { PLATFORM_LIST, type PlatformMeta } from "@/types/prompt-studio";
 
 const RECENT_KEY = "prompt-studio:recent-platforms";
+const MAX_RECENT_PLATFORMS = 10;
 
 function getRecentPlatforms(): string[] {
     try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); } catch { return []; }
@@ -14,7 +15,7 @@ function getRecentPlatforms(): string[] {
 function pushRecentPlatform(id: string) {
     const list = getRecentPlatforms().filter((p) => p !== id);
     list.unshift(id);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10)));
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT_PLATFORMS)));
 }
 
 /** 按最近使用排序 */
@@ -35,7 +36,8 @@ function sortByRecent(platforms: PlatformMeta[]): PlatformMeta[] {
  * compact 用于双栏工作台顶部紧凑工具条
  */
 export function PlatformSelector({ compact = false }: { compact?: boolean }) {
-    const { selectedPlatforms, togglePlatform } = usePromptStudioStore();
+    const selectedPlatforms = usePromptStudioStore((s) => s.selectedPlatforms);
+    const togglePlatform = usePromptStudioStore((s) => s.togglePlatform);
 
     const imagePlatforms = sortByRecent(PLATFORM_LIST.filter((p) => p.category === "image"));
     const videoPlatforms = sortByRecent(PLATFORM_LIST.filter((p) => p.category === "video"));

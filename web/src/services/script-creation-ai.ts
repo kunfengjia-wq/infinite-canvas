@@ -2,6 +2,7 @@
  * 剧本创作工作台 AI 服务
  * 五阶段：灵感卡片生成 → 设定方案生成 → 结构方案生成 → 逐段剧本生成 → 一致性检查
  */
+import { nanoid } from "nanoid";
 import { requestImageQuestion, type AiTextMessage } from "@/services/api/image";
 import type { AiConfig } from "@/stores/use-config-store";
 import { preferenceRepo } from "@/services/db";
@@ -17,12 +18,6 @@ import type {
     StoryBeat,
 } from "@/types/script-creation";
 import { CARD_TYPE_META } from "@/types/script-creation";
-
-// ─── 工具函数 ────────────────────────────────────────────────────
-
-function genId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 // ─── Phase 1：灵感卡片生成 ──────────────────────────────────────
 
@@ -81,7 +76,7 @@ export async function aiGenerateInspirationCards(
         const items = parseJsonArray<{ type: string; title: string; description: string }>(raw);
         recordGeneration({ skillId: "sc_inspiration", inputText: seed.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
-            id: genId(),
+            id: nanoid(),
             type: item.type as InspirationCardType,
             title: item.title,
             description: item.description,
@@ -108,7 +103,7 @@ export async function aiRefreshCardsByType(
         const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
         const items = parseJsonArray<{ title: string; description: string }>(raw);
         return items.map((item) => ({
-            id: genId(),
+            id: nanoid(),
             type: cardType,
             title: item.title,
             description: item.description,
@@ -159,12 +154,12 @@ export async function aiGenerateSettings(
         const items = parseJsonArray<any>(raw);
         recordGeneration({ skillId: "sc_setting", inputText: cardsContext.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
-            id: genId(),
+            id: nanoid(),
             title: item.title,
             summary: item.summary,
-            characters: (item.characters || []).map((c: any) => ({ ...c, id: genId() })),
-            world: { ...item.world, id: genId() },
-            conflict: { ...item.conflict, id: genId() },
+            characters: (item.characters || []).map((c: any) => ({ ...c, id: nanoid() })),
+            world: { ...item.world, id: nanoid() },
+            conflict: { ...item.conflict, id: nanoid() },
         }));
     });
 }
@@ -235,11 +230,11 @@ export async function aiGenerateStructures(
         const items = parseJsonArray<any>(raw);
         recordGeneration({ skillId: "sc_structure", inputText: settingContext.slice(0, 300), outputText: raw.slice(0, 500), model: config.model });
         return items.map((item) => ({
-            id: genId(),
+            id: nanoid(),
             title: item.title,
             structureType: item.structureType,
             overview: item.overview,
-            beats: (item.beats || []).map((b: any, i: number) => ({ ...b, id: genId(), index: i })),
+            beats: (item.beats || []).map((b: any, i: number) => ({ ...b, id: nanoid(), index: i })),
             estimatedLength: item.estimatedLength,
             emotionArc: item.emotionArc,
         }));

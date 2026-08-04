@@ -12,7 +12,10 @@ import type { AiConfig } from "@/stores/use-config-store";
 export function FinalOutput({ config }: { config: AiConfig }) {
     const { message } = App.useApp();
     const navigate = useNavigate();
-    const { current, setConsistencyReport, setFullScript, saveCurrent } = useScriptCreationStore();
+    const current = useScriptCreationStore((s) => s.current);
+    const setConsistencyReport = useScriptCreationStore((s) => s.setConsistencyReport);
+    const setFullScript = useScriptCreationStore((s) => s.setFullScript);
+    const saveCurrent = useScriptCreationStore((s) => s.saveCurrent);
     const [checking, setChecking] = useState(false);
     const [fixing, setFixing] = useState(false);
     const [transferring, setTransferring] = useState(false);

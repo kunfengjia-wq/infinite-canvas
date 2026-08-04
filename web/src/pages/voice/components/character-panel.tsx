@@ -6,7 +6,10 @@ import { useVoiceStore } from "../store/use-voice-store";
 import { cn } from "@/lib/utils";
 
 export function CharacterPanel() {
-    const { current, models, addCharacter, removeCharacter } = useVoiceStore();
+    const current = useVoiceStore((s) => s.current);
+    const models = useVoiceStore((s) => s.models);
+    const addCharacter = useVoiceStore((s) => s.addCharacter);
+    const removeCharacter = useVoiceStore((s) => s.removeCharacter);
     const [newName, setNewName] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
 

@@ -55,7 +55,7 @@ function syncToRemote(record: AssetRecord): void {
 
 function deleteFromRemote(id: string): void {
     if (!isRemoteSyncEnabled()) return;
-    supabase.from("assets").delete().eq("id", id).then(() => {}, () => {});
+    supabase.from("assets").delete().eq("id", id).then(() => {}, (err) => console.warn("[sync] asset sync failed:", err));
 }
 
 // ─── 查询 ───────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ export async function batchCreateAssets(
     }
     // 后台批量同步
     if (isRemoteSyncEnabled()) {
-        supabase.from("assets").upsert(records, { onConflict: "id" }).then(() => {}, () => {});
+        supabase.from("assets").upsert(records, { onConflict: "id" }).then(() => {}, (err) => console.warn("[sync] asset sync failed:", err));
     }
     return records.length;
 }
@@ -150,7 +150,7 @@ export async function incrementUsageCount(id: string): Promise<void> {
     await store.setItem(id, updated);
     // 使用计数同步优先级低，静默处理
     if (isRemoteSyncEnabled()) {
-        supabase.from("assets").update({ usage_count: updated.usage_count }).eq("id", id).then(() => {}, () => {});
+        supabase.from("assets").update({ usage_count: updated.usage_count }).eq("id", id).then(() => {}, (err) => console.warn("[sync] asset sync failed:", err));
     }
 }
 

@@ -44,8 +44,8 @@ export async function pushConfigToCloud(config: unknown, webdav: unknown): Promi
             { id: SETTINGS_ID, data: payload, updated_at: payload.updatedAt },
             { onConflict: "id" },
         );
-    } catch {
-        // 静默失败
+    } catch (err) {
+        console.warn("[config-cloud-sync] push failed:", err);
     }
 }
 
