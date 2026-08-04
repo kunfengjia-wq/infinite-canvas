@@ -1,4 +1,4 @@
-import { Pause, Play, Scissors, Trash2, VolumeX } from "lucide-react";
+import { Pause, Play, Scissors } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App, Button, Tooltip } from "antd";
 
@@ -10,21 +10,19 @@ interface Props {
     duration: number;
 }
 
-/** 音频裁剪编辑器 - 波形可视化 + 裁剪/分割/静音 */
 export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
     const { message } = App.useApp();
     const trimAudio = useVoiceStore((s) => s.trimAudio);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const bufferRef = useRef<AudioBuffer | null>(null);
-    const [selStart, setSelStart] = useState(0); // 0-1 比例
+    const [selStart, setSelStart] = useState(0);
     const [selEnd, setSelEnd] = useState(1);
     const [playing, setPlaying] = useState(false);
     const [trimming, setTrimming] = useState(false);
     const [dragging, setDragging] = useState<"start" | "end" | "region" | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-    // 组件卸载时关闭 AudioContext
     useEffect(() => {
         return () => {
             sourceRef.current?.stop();
@@ -34,7 +32,6 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         };
     }, []);
 
-    // ResizeObserver 动态设置 canvas 尺寸
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -53,7 +50,6 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         return () => observer.disconnect();
     }, []);
 
-    // 加载音频并绘制波形
     useEffect(() => {
         bufferRef.current = null;
         let cancelled = false;
@@ -88,8 +84,8 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         const step = Math.ceil(data.length / width);
         const mid = height / 2;
 
-        // 波形
-        ctx.fillStyle = "#a78bfa";
+        // Waveform bars
+        ctx.fillStyle = "#7c3aed";
         for (let x = 0; x < width; x++) {
             let max = 0;
             for (let i = 0; i < step; i++) {
@@ -100,30 +96,28 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
             ctx.fillRect(x, mid - barH, 1, barH * 2);
         }
 
-        // 选区遮罩
+        // Selection masks
         const startX = selStart * width;
         const endX = selEnd * width;
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.fillRect(0, 0, startX, height);
         ctx.fillRect(endX, 0, width - endX, height);
 
-        // 选区边框
-        ctx.strokeStyle = "#7c3aed";
+        // Selection border
+        ctx.strokeStyle = "#a78bfa";
         ctx.lineWidth = 2;
         ctx.strokeRect(startX, 0, endX - startX, height);
 
-        // 手柄
-        ctx.fillStyle = "#7c3aed";
+        // Handles
+        ctx.fillStyle = "#a78bfa";
         ctx.fillRect(startX - 3, 0, 6, height);
         ctx.fillRect(endX - 3, 0, 6, height);
     }, [selStart, selEnd]);
 
-    // 重绘
     useEffect(() => {
         if (bufferRef.current) drawWaveform(bufferRef.current);
     }, [selStart, selEnd, drawWaveform]);
 
-    // 鼠标交互
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -136,7 +130,6 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         else if (Math.abs(x - endX) < 0.02) setDragging("end");
         else if (x > startX && x < endX) setDragging("region");
         else {
-            // 点击空白处设置新选区起点
             setSelStart(x);
             setSelEnd(Math.min(x + 0.1, 1));
             setDragging("end");
@@ -156,7 +149,6 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
 
     const handleMouseUp = () => setDragging(null);
 
-    // 预览播放选区
     const playSelection = () => {
         const ctx = audioCtxRef.current;
         const buffer = bufferRef.current;
@@ -174,7 +166,6 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
         setPlaying(true);
     };
 
-    // 裁剪（保留选区）
     const handleTrim = async () => {
         const buffer = bufferRef.current;
         if (!buffer) return;
@@ -197,27 +188,26 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
 
     return (
         <div className="space-y-2 p-3">
-            <div className="flex items-center justify-between text-[10px] text-stone-400">
+            <div className="flex items-center justify-between text-[10px] text-stone-500">
                 <span>选区: {(selStartMs / 1000).toFixed(2)}s - {(selEndMs / 1000).toFixed(2)}s</span>
                 <span>总时长: {duration.toFixed(2)}s</span>
             </div>
 
-            {/* 波形画布 */}
             <canvas
                 ref={canvasRef}
-                className="h-20 w-full cursor-crosshair rounded-lg border border-stone-200 dark:border-stone-700"
+                className="h-20 w-full cursor-crosshair rounded-lg border border-white/[0.06] bg-white/[0.02]"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
             />
 
-            {/* 操作按钮 */}
             <div className="flex items-center gap-2">
                 <Tooltip title="播放选区">
                     <Button
                         type="text"
                         size="small"
+                        className="!text-stone-400 hover:!text-violet-400 hover:!bg-violet-500/10"
                         icon={playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
                         onClick={playing ? () => { sourceRef.current?.stop(); setPlaying(false); } : playSelection}
                     />
@@ -225,6 +215,7 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
                 <Tooltip title="裁剪（保留选区）">
                     <Button
                         size="small"
+                        className="!border-white/[0.08] !bg-white/[0.04] !text-stone-400 hover:!text-stone-200"
                         icon={<Scissors className="size-3" />}
                         loading={trimming}
                         onClick={handleTrim}
@@ -233,7 +224,13 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
                     </Button>
                 </Tooltip>
                 <Tooltip title="全选">
-                    <Button size="small" onClick={() => { setSelStart(0); setSelEnd(1); }}>全选</Button>
+                    <Button
+                        size="small"
+                        className="!border-white/[0.08] !bg-white/[0.04] !text-stone-400 hover:!text-stone-200"
+                        onClick={() => { setSelStart(0); setSelEnd(1); }}
+                    >
+                        全选
+                    </Button>
                 </Tooltip>
             </div>
         </div>

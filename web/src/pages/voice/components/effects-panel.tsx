@@ -3,13 +3,15 @@ import { useState } from "react";
 import { App, Button, Slider } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_EFFECTS, EFFECTS_PRESETS, type AudioEffects } from "../types";
 import { cn } from "@/lib/utils";
 
 export function EffectsPanel() {
     const { message } = App.useApp();
-    const current = useVoiceStore((s) => s.current);
-    const applyEffects = useVoiceStore((s) => s.applyEffects);
+    const { current, applyEffects } = useVoiceStore(
+        useShallow((s) => ({ current: s.current, applyEffects: s.applyEffects })),
+    );
     const [effects, setEffects] = useState<AudioEffects>({ ...DEFAULT_EFFECTS });
     const [applying, setApplying] = useState(false);
     const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -48,19 +50,19 @@ export function EffectsPanel() {
 
     return (
         <div className="space-y-4 p-3">
-            {/* 预设 */}
+            {/* Presets */}
             <div>
-                <p className="mb-2 text-xs font-medium text-stone-500">预设</p>
+                <p className="mb-2 text-[11px] font-medium text-stone-500 uppercase tracking-wider">预设</p>
                 <div className="grid grid-cols-2 gap-1.5">
                     {EFFECTS_PRESETS.map((preset) => (
                         <button
                             key={preset.name}
                             type="button"
                             className={cn(
-                                "rounded-lg border px-2 py-1.5 text-xs transition-colors",
+                                "rounded-lg border px-2 py-1.5 text-xs transition-all",
                                 activePreset === preset.name
-                                    ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
-                                    : "border-stone-200 hover:border-stone-300 dark:border-stone-700",
+                                    ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
+                                    : "border-white/[0.06] bg-white/[0.02] text-stone-400 hover:border-white/[0.1] hover:text-stone-200",
                             )}
                             onClick={() => applyPreset(preset.name, preset.effects)}
                         >
@@ -70,7 +72,7 @@ export function EffectsPanel() {
                 </div>
             </div>
 
-            {/* 滑块 */}
+            {/* Sliders */}
             <div className="space-y-3">
                 {sliders.map(({ key, label, min, max, step, unit }) => {
                     const rawValue = effects[key];
@@ -80,7 +82,7 @@ export function EffectsPanel() {
                         <div key={key}>
                             <div className="mb-0.5 flex items-center justify-between text-[10px] text-stone-500">
                                 <span>{label}</span>
-                                <span>{displayValue}{unit}</span>
+                                <span className="tabular-nums">{displayValue}{unit}</span>
                             </div>
                             <Slider
                                 min={min}
@@ -88,22 +90,26 @@ export function EffectsPanel() {
                                 step={step}
                                 value={sliderValue}
                                 onChange={(v) => update(key, key === "reverb" ? v / 100 : v)}
-                                className="!my-0"
+                                className="!my-0 [&_.ant-rail]:!bg-white/[0.06] [&_.ant-rail]:!h-1 [&_.ant-track]:!bg-violet-500 [&_.ant-track]:!h-1 [&_.ant-slider-handle]:!border-violet-400 [&_.ant-slider-handle]:!bg-violet-500 [&_.ant-slider-handle]:!shadow-none [&_.ant-slider-handle]:!size-2.5"
                             />
                         </div>
                     );
                 })}
             </div>
 
-            {/* 操作 */}
+            {/* Actions */}
             <div className="flex gap-2">
-                <Button size="small" onClick={() => { setEffects({ ...DEFAULT_EFFECTS }); setActivePreset(null); }}>
+                <Button
+                    size="small"
+                    className="!border-white/[0.08] !bg-white/[0.04] !text-stone-400 hover:!text-stone-200"
+                    onClick={() => { setEffects({ ...DEFAULT_EFFECTS }); setActivePreset(null); }}
+                >
                     重置
                 </Button>
                 <Button
                     type="primary"
                     size="small"
-                    className="flex-1"
+                    className="flex-1 !bg-violet-500 !border-none hover:!bg-violet-400"
                     icon={<Wand2 className="size-3" />}
                     loading={applying}
                     onClick={() => void handleApply("all")}

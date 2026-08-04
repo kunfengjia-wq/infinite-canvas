@@ -3,13 +3,19 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Input, Upload as AntUpload } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
+import { cn } from "@/lib/utils";
 
 export function VoiceClonePanel() {
     const { message } = App.useApp();
-    const clonedVoices = useVoiceStore((s) => s.clonedVoices);
-    const loadVoices = useVoiceStore((s) => s.loadVoices);
-    const cloneVoice = useVoiceStore((s) => s.cloneVoice);
-    const deleteClonedVoice = useVoiceStore((s) => s.deleteClonedVoice);
+    const { clonedVoices, loadVoices, cloneVoice, deleteClonedVoice } = useVoiceStore(
+        useShallow((s) => ({
+            clonedVoices: s.clonedVoices,
+            loadVoices: s.loadVoices,
+            cloneVoice: s.cloneVoice,
+            deleteClonedVoice: s.deleteClonedVoice,
+        })),
+    );
     const [name, setName] = useState("");
     const [refText, setRefText] = useState("");
     const [samples, setSamples] = useState<Blob[]>([]);
@@ -23,7 +29,6 @@ export function VoiceClonePanel() {
         void loadVoices();
     }, [loadVoices]);
 
-    // 组件卸载时清理录音资源
     useEffect(() => {
         return () => {
             mediaRecorderRef.current?.stop();
@@ -32,7 +37,6 @@ export function VoiceClonePanel() {
         };
     }, []);
 
-    // 录音
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -58,13 +62,11 @@ export function VoiceClonePanel() {
         setRecording(false);
     };
 
-    // 上传文件
     const handleUpload = (file: File) => {
         setSamples((prev) => [...prev, file]);
         return false;
     };
 
-    // 克隆
     const handleClone = async () => {
         if (!name.trim()) { message.warning("请输入音色名称"); return; }
         if (samples.length === 0) { message.warning("请至少添加一段参考音频（3-10秒）"); return; }
@@ -84,49 +86,63 @@ export function VoiceClonePanel() {
 
     return (
         <div className="space-y-4 p-3">
-            {/* 克隆创建区 */}
-            <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-700">
-                <p className="mb-2 text-xs font-medium text-stone-500">创建克隆音色</p>
+            {/* Clone creation */}
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                <p className="mb-3 text-[11px] font-medium text-stone-500 uppercase tracking-wider">创建克隆音色</p>
                 <Input
                     size="small"
                     placeholder="音色名称（如：角色A）"
-                    prefix={<AudioLines className="size-3 text-stone-400" />}
+                    prefix={<AudioLines className="size-3 text-stone-600" />}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mb-2"
+                    className="mb-2 !border-white/[0.08] !bg-white/[0.04] !text-stone-200 placeholder:!text-stone-600"
                 />
 
-                {/* 参考文本（可选，提升克隆质量） */}
                 <Input.TextArea
                     autoSize={{ minRows: 1, maxRows: 3 }}
                     placeholder="参考音频对应文本（可选，提升克隆质量）"
                     value={refText}
                     onChange={(e) => setRefText(e.target.value)}
-                    className="mb-2 !text-xs"
+                    className="mb-2 !border-white/[0.08] !bg-white/[0.04] !text-xs !text-stone-200 placeholder:!text-stone-600"
                 />
 
-                <p className="mb-2 text-[10px] text-stone-400">提示：上传 3-10 秒清晰人声效果最佳</p>
+                <p className="mb-2 text-[10px] text-stone-600">提示：上传 3-10 秒清晰人声效果最佳</p>
 
-                {/* 样本列表 */}
                 {samples.length > 0 && (
                     <div className="mb-2 space-y-1">
                         {samples.map((_, i) => (
-                            <div key={i} className="flex items-center gap-2 rounded bg-stone-100 px-2 py-1 text-[10px] dark:bg-stone-800">
+                            <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[10px]">
                                 <span className="text-stone-500">样本 {i + 1}</span>
-                                <Button type="text" size="small" danger icon={<Trash2 className="size-2.5" />} onClick={() => setSamples((p) => p.filter((_, idx) => idx !== i))} />
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    className="!text-stone-500 hover:!text-red-400"
+                                    icon={<Trash2 className="size-2.5" />}
+                                    onClick={() => setSamples((p) => p.filter((_, idx) => idx !== i))}
+                                />
                             </div>
                         ))}
                     </div>
                 )}
 
-                {/* 操作按钮 */}
                 <div className="flex gap-2">
                     <AntUpload accept="audio/*" showUploadList={false} beforeUpload={handleUpload} multiple>
-                        <Button size="small" icon={<Upload className="size-3" />}>上传音频</Button>
+                        <Button
+                            size="small"
+                            className="!border-white/[0.08] !bg-white/[0.04] !text-stone-400 hover:!text-stone-200"
+                            icon={<Upload className="size-3" />}
+                        >
+                            上传音频
+                        </Button>
                     </AntUpload>
                     <Button
                         size="small"
-                        danger={recording}
+                        className={cn(
+                            "!border-white/[0.08] !bg-white/[0.04]",
+                            recording
+                                ? "!text-red-400 !border-red-500/30 !bg-red-500/10"
+                                : "!text-stone-400 hover:!text-stone-200",
+                        )}
                         icon={recording ? <MicOff className="size-3" /> : <Mic className="size-3" />}
                         onClick={recording ? stopRecording : startRecording}
                     >
@@ -138,7 +154,7 @@ export function VoiceClonePanel() {
                     type="primary"
                     block
                     size="small"
-                    className="mt-2"
+                    className="mt-3 !bg-violet-500 !border-none hover:!bg-violet-400"
                     icon={cloning ? <LoaderCircle className="size-3 animate-spin" /> : undefined}
                     disabled={cloning}
                     onClick={handleClone}
@@ -147,22 +163,23 @@ export function VoiceClonePanel() {
                 </Button>
             </div>
 
-            {/* 已有克隆音色 */}
+            {/* Existing cloned voices */}
             <div>
-                <p className="mb-2 text-xs font-medium text-stone-500">音色库 ({clonedVoices.length})</p>
-                {clonedVoices.length === 0 && <p className="text-[10px] text-stone-400">暂无克隆音色</p>}
+                <p className="mb-2 text-[11px] font-medium text-stone-500 uppercase tracking-wider">
+                    音色库 ({clonedVoices.length})
+                </p>
+                {clonedVoices.length === 0 && <p className="text-[10px] text-stone-600">暂无克隆音色</p>}
                 <div className="space-y-1.5">
                     {clonedVoices.map((v) => (
-                        <div key={v.id} className="group flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 dark:border-stone-700">
-                            <AudioLines className="size-3.5 text-violet-500" />
-                            <span className="flex-1 truncate text-xs">{v.name}</span>
-                            <span className="text-[10px] text-stone-400">{v.samples_count} 样本</span>
+                        <div key={v.id} className="group flex items-center gap-2 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2 hover:border-white/[0.08]">
+                            <AudioLines className="size-3.5 text-violet-400" />
+                            <span className="flex-1 truncate text-xs text-stone-300">{v.name}</span>
+                            <span className="text-[10px] text-stone-600">{v.samples_count} 样本</span>
                             <Button
                                 type="text"
                                 size="small"
-                                danger
+                                className="!text-stone-500 hover:!text-red-400 hover:!bg-red-500/10 opacity-0 group-hover:opacity-100"
                                 icon={<Trash2 className="size-3" />}
-                                className="opacity-0 group-hover:opacity-100"
                                 onClick={() => void deleteClonedVoice(v.id)}
                             />
                         </div>

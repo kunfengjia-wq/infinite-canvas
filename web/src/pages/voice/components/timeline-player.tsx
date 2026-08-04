@@ -1,22 +1,24 @@
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Scissors } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Slider } from "antd";
+import { Button, Slider, Tooltip } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
+import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
 
 export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) => void }) {
-    const current = useVoiceStore((s) => s.current);
+    const { current } = useVoiceStore(
+        useShallow((s) => ({ current: s.current })),
+    );
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [playing, setPlaying] = useState(false);
     const [currentIdx, setCurrentIdx] = useState(0);
-    const [totalProgress, setTotalProgress] = useState(0); // 全局进度
+    const [totalProgress, setTotalProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
 
     const doneLines = current?.lines.filter((l) => l.status === "done" && l.audioUrl) ?? [];
     const totalDuration = doneLines.reduce((acc, l) => acc + (l.duration ?? 0), 0);
 
-    // 前缀和预计算，避免 ontimeupdate 中 O(n) reduce
     const prefixDurations = useMemo(() => {
         const sums = [0];
         for (let i = 0; i < doneLines.length; i++) {
@@ -25,7 +27,6 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         return sums;
     }, [doneLines]);
 
-    // 用 ref 存储最新值，避免闭包陈旧引用
     const doneLinesRef = useRef(doneLines);
     const totalDurationRef = useRef(totalDuration);
     const prefixDurationsRef = useRef(prefixDurations);
@@ -33,7 +34,6 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
     totalDurationRef.current = totalDuration;
     prefixDurationsRef.current = prefixDurations;
 
-    // 播放当前片段
     const playAt = useCallback((idx: number) => {
         const lines = doneLinesRef.current;
         const total = totalDurationRef.current;
@@ -54,7 +54,6 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         audio.ontimeupdate = () => {
             setCurrentTime(audio.currentTime);
             if (audio.duration) {
-                // 全局进度（O(1) 前缀和查找）
                 const prefix = prefixDurationsRef.current;
                 const elapsed = (prefix[idx] ?? 0) + audio.currentTime;
                 setTotalProgress(total > 0 ? (elapsed / total) * 100 : 0);
@@ -94,70 +93,117 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
     const elapsed = (prefixDurations[currentIdx] ?? 0) + currentTime;
 
     return (
-        <footer className="border-t border-stone-200 bg-stone-50/80 px-4 py-2.5 dark:border-stone-800 dark:bg-stone-900/40">
-            {/* 片段指示器 */}
-            <div className="mb-2 flex items-center gap-1 overflow-x-auto">
+        <footer className="border-t border-white/[0.06] bg-[#16161d] px-4 py-2.5">
+            {/* ── Segment strip (visual timeline) ── */}
+            <div className="mb-2.5 flex items-center gap-0.5 overflow-x-auto rounded-lg bg-white/[0.02] p-1.5">
                 {doneLines.map((line, idx) => {
                     const char = current.characters.find((c) => c.id === line.characterId);
+                    const charColor = char?.color ?? "#6b7280";
+                    const isActive = idx === currentIdx && playing;
+                    const widthPercent = totalDuration > 0 ? ((line.duration ?? 1) / totalDuration) * 100 : 100 / doneLines.length;
+
                     return (
-                        <button
+                        <Tooltip
                             key={line.id}
-                            className={cn(
-                                "h-6 shrink-0 rounded px-2 text-[10px] transition-all",
-                                idx === currentIdx && playing
-                                    ? "bg-violet-500 text-white shadow-sm"
-                                    : "bg-stone-200 text-stone-500 hover:bg-stone-300 dark:bg-stone-700 dark:text-stone-300",
-                            )}
-                            style={{ minWidth: `${Math.max(24, (line.duration ?? 1) * 12)}px` }}
-                            onClick={() => playAt(idx)}
-                            onDoubleClick={() => onEditLine?.(line.id)}
-                            title={`${char?.name ?? ""} - 双击裁剪`}
+                            title={`${char?.name ?? ""} — ${formatTime(line.duration ?? 0)}${idx === currentIdx && playing ? " ▶" : ""}`}
                         >
-                            {idx + 1}
-                        </button>
+                            <button
+                                className={cn(
+                                    "group/seg relative h-8 shrink-0 rounded-md transition-all",
+                                    isActive
+                                        ? "ring-2 ring-white/30 shadow-sm"
+                                        : "hover:brightness-125",
+                                )}
+                                style={{
+                                    width: `${Math.max(4, widthPercent)}%`,
+                                    minWidth: "28px",
+                                    backgroundColor: isActive ? charColor : `${charColor}88`,
+                                }}
+                                onClick={() => playAt(idx)}
+                                onDoubleClick={() => onEditLine?.(line.id)}
+                            >
+                                {/* Segment label */}
+                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white/90 drop-shadow-sm">
+                                    {idx + 1}
+                                </span>
+
+                                {/* Playhead indicator */}
+                                {isActive && (
+                                    <span className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-white shadow" />
+                                )}
+
+                                {/* Scissors hint on hover */}
+                                <span className="absolute inset-0 flex items-center justify-center rounded-md bg-black/40 opacity-0 transition-opacity group-hover/seg:opacity-100">
+                                    <Scissors className="size-3 text-white/80" />
+                                </span>
+                            </button>
+                        </Tooltip>
                     );
                 })}
             </div>
 
-            {/* 控制栏 */}
+            {/* ── Controls row ── */}
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1">
-                    <Button type="text" size="small" icon={<SkipBack className="size-3.5" />} onClick={() => playAt(currentIdx - 1)} />
-                    <Button
-                        type="primary"
-                        size="small"
-                        shape="circle"
-                        icon={playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                {/* Transport buttons */}
+                <div className="flex items-center gap-0.5">
+                    <Tooltip title="上一段">
+                        <Button
+                            type="text"
+                            size="small"
+                            className="!text-stone-400 hover:!text-stone-200 hover:!bg-white/[0.06]"
+                            icon={<SkipBack className="size-3.5" />}
+                            onClick={() => playAt(currentIdx - 1)}
+                        />
+                    </Tooltip>
+                    <button
+                        className="flex size-8 items-center justify-center rounded-full bg-violet-500 text-white shadow-sm shadow-violet-500/20 transition-colors hover:bg-violet-400"
                         onClick={togglePlay}
-                    />
-                    <Button type="text" size="small" icon={<SkipForward className="size-3.5" />} onClick={() => playAt(currentIdx + 1)} />
+                    >
+                        {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5 ml-0.5" />}
+                    </button>
+                    <Tooltip title="下一段">
+                        <Button
+                            type="text"
+                            size="small"
+                            className="!text-stone-400 hover:!text-stone-200 hover:!bg-white/[0.06]"
+                            icon={<SkipForward className="size-3.5" />}
+                            onClick={() => playAt(currentIdx + 1)}
+                        />
+                    </Tooltip>
                 </div>
 
-                {/* 全局进度条 */}
-                <Slider
-                    className="flex-1"
-                    min={0}
-                    max={100}
-                    value={totalProgress}
-                    onChange={(v) => {
-                        // 跳转到对应位置
-                        const targetTime = (v / 100) * totalDuration;
-                        let acc = 0;
-                        for (let i = 0; i < doneLines.length; i++) {
-                            const dur = doneLines[i].duration ?? 0;
-                            if (acc + dur >= targetTime) {
-                                playAt(i);
-                                break;
-                            }
-                            acc += dur;
-                        }
-                    }}
-                    tooltip={{ formatter: (v) => formatTime(((v ?? 0) / 100) * totalDuration) }}
-                />
+                {/* Separator */}
+                <div className="h-4 w-px bg-white/[0.06]" />
 
-                <span className="shrink-0 text-[10px] tabular-nums text-stone-400">
-                    {formatTime(elapsed)} / {formatTime(totalDuration)}
-                </span>
+                {/* Progress bar */}
+                <div className="flex flex-1 items-center gap-3">
+                    <Slider
+                        className="flex-1 [&_.ant-rail]:!bg-white/[0.06] [&_.ant-rail]:!h-1.5 [&_.ant-track]:!bg-violet-500 [&_.ant-track]:!h-1.5 [&_.ant-slider-handle]:!border-violet-400 [&_.ant-slider-handle]:!bg-violet-500 [&_.ant-slider-handle]:!shadow-none [&_.ant-slider-handle]:!size-3"
+                        min={0}
+                        max={100}
+                        value={totalProgress}
+                        onChange={(v) => {
+                            const targetTime = (v / 100) * totalDuration;
+                            let acc = 0;
+                            for (let i = 0; i < doneLines.length; i++) {
+                                const dur = doneLines[i].duration ?? 0;
+                                if (acc + dur >= targetTime) {
+                                    playAt(i);
+                                    break;
+                                }
+                                acc += dur;
+                            }
+                        }}
+                        tooltip={{ formatter: (v) => formatTime(((v ?? 0) / 100) * totalDuration) }}
+                    />
+                </div>
+
+                {/* Time display */}
+                <div className="flex shrink-0 items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1">
+                    <span className="text-[11px] tabular-nums text-stone-300">{formatTime(elapsed)}</span>
+                    <span className="text-[11px] text-stone-600">/</span>
+                    <span className="text-[11px] tabular-nums text-stone-500">{formatTime(totalDuration)}</span>
+                </div>
             </div>
         </footer>
     );
