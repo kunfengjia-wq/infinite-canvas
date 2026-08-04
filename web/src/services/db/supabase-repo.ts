@@ -6,6 +6,9 @@
  */
 import { supabase, isRemoteSyncEnabled } from "./supabase-client";
 import type { Repository } from "./index";
+import type { StoryboardProject } from "../../types/storyboard";
+import type { PromptProject } from "../../types/prompt-studio";
+import type { ScriptProject } from "../../types/script-creation";
 
 const TABLE_STORYBOARD = "storyboard_projects";
 const TABLE_PROMPT = "prompt_projects";
@@ -39,9 +42,9 @@ function createSupabaseRepo<T extends { id: string; updatedAt: string }>(table: 
     };
 }
 
-export const supabaseStoryboardRepo = createSupabaseRepo<any>(TABLE_STORYBOARD);
-export const supabasePromptProjectRepo = createSupabaseRepo<any>(TABLE_PROMPT);
-export const supabaseScriptProjectRepo = createSupabaseRepo<any>(TABLE_SCRIPT);
+export const supabaseStoryboardRepo = createSupabaseRepo<StoryboardProject>(TABLE_STORYBOARD);
+export const supabasePromptProjectRepo = createSupabaseRepo<PromptProject>(TABLE_PROMPT);
+export const supabaseScriptProjectRepo = createSupabaseRepo<ScriptProject>(TABLE_SCRIPT);
 
 /**
  * 混合同步仓库：本地优先 + 远程合并

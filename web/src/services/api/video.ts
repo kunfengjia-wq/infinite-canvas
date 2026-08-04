@@ -66,7 +66,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
         return createSeedanceTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
     if (videoReferences.length || audioReferences.length) {
-        throw new Error("当前视频接口不支持参考视频或参考音频，请切换到 Seedance 2.0 / 火山 Agent Plan 模型，或移除参考资产");
+        throw new Error("当前视频接口不支持参考视频或参考音频，请切换到 Seedance 2.5 / 火山 Agent Plan 模型，或移除参考资产");
     }
     return createOpenAIVideoTask(requestConfig, selectedModel, prompt, references, options);
 }

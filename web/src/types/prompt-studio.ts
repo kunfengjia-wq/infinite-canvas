@@ -41,6 +41,7 @@ export const PLATFORM_LIST: PlatformMeta[] = [
     { id: "ideogram", label: "Ideogram", category: "image", description: "文字渲染能力强，适合海报设计", supportsNegative: false, maxLength: 400 },
     { id: "leonardo", label: "Leonardo AI", category: "image", description: "游戏资产和概念设计", supportsNegative: true, maxLength: 500 },
     { id: "gpt-image", label: "GPT Image", category: "image", description: "OpenAI 最新图像生成", supportsNegative: false, maxLength: 400 },
+    { id: "gemini", label: "Google Gemini Image", category: "image", description: "Google Gemini 原生图像生成与编辑，支持多轮对话式生图", supportsNegative: false, maxLength: 500 },
     { id: "wanx", label: "通义万相", category: "image", description: "阿里通义，中文理解好", supportsNegative: true, maxLength: 500 },
     // 视频平台
     { id: "kling", label: "可灵 Kling", category: "video", description: "快手视频生成，运动控制好", supportsNegative: false, maxLength: 300 },
@@ -48,10 +49,10 @@ export const PLATFORM_LIST: PlatformMeta[] = [
     { id: "pika", label: "Pika", category: "video", description: "轻量视频生成，适合短片段", supportsNegative: false, maxLength: 200 },
     { id: "sora", label: "Sora", category: "video", description: "OpenAI 视频生成，电影级质量", supportsNegative: false, maxLength: 400 },
     { id: "veo", label: "Google Veo", category: "video", description: "Google 视频生成，物理真实感强", supportsNegative: false, maxLength: 300 },
-    { id: "hailuo", label: "海螺 Hailuo", category: "video", description: "MiniMax 视频生成", supportsNegative: false, maxLength: 300 },
+    { id: "hailuo", label: "海螺 MiniMax", category: "video", description: "MiniMax海螺视频生成，支持语音合成、情感控制、多镜头", supportsNegative: false, maxLength: 300 },
     { id: "vidu", label: "Vidu", category: "video", description: "生数科技视频生成", supportsNegative: false, maxLength: 300 },
     { id: "luma", label: "Luma", category: "video", description: "3D 理解能力强", supportsNegative: false, maxLength: 300 },
-    { id: "seedance", label: "Seedance 2.0", category: "video", description: "字节跳动音画联合生成，支持对白唇形同步、多镜头、环境音", supportsNegative: false, maxLength: 400 },
+    { id: "seedance", label: "Seedance 2.5", category: "video", description: "字节跳动音画联合生成v2.5，支持对白唇形同步、多镜头串联、环境音、音画节奏联动", supportsNegative: false, maxLength: 400 },
     { id: "grok", label: "Grok", category: "video", description: "xAI Grok Imagine 视频生成，写实电影感", supportsNegative: false, maxLength: 300 },
 ];
 
