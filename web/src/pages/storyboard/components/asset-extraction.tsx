@@ -1,5 +1,5 @@
 import { LoaderCircle, MapPin, Package, Plus, RefreshCw, Send, Sparkles, Trash2, User, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App, Button, Card, Empty, Input, Popconfirm, Tabs, Tooltip } from "antd";
 import { nanoid } from "nanoid";
 
@@ -13,6 +13,16 @@ export function AssetExtraction({ config, onError, onExportToPrompt }: { config:
     const { current, processing, setProcessing, setAssets, confirmAssets, saveCurrent } = useStoryboardStore();
     const [extracting, setExtracting] = useState(false);
     const [regenId, setRegenId] = useState<string | null>(null);
+    const abortRef = useRef(new AbortController());
+
+    useEffect(() => {
+        return () => abortRef.current.abort();
+    }, []);
+
+    useEffect(() => {
+        abortRef.current.abort();
+        abortRef.current = new AbortController();
+    }, [current?.id]);
 
     if (!current) return null;
     const assets = {

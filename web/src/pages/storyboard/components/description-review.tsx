@@ -1,5 +1,5 @@
 import { Camera, Copy, LoaderCircle, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App, Button, Card, Collapse, Empty, Input, Progress, Tag, Tooltip } from "antd";
 
 import { useStoryboardStore } from "@/stores/use-storyboard-store";
@@ -16,6 +16,16 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
     const [batchGenerating, setBatchGenerating] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
     const [failedShots, setFailedShots] = useState<{ sceneId: string; shotId: string; action: string }[]>([]);
+    const abortRef = useRef(new AbortController());
+
+    useEffect(() => {
+        return () => abortRef.current.abort();
+    }, []);
+
+    useEffect(() => {
+        abortRef.current.abort();
+        abortRef.current = new AbortController();
+    }, [current?.id]);
 
     if (!current) return null;
     const scenes = current.scenes ?? [];
@@ -59,13 +69,20 @@ export function DescriptionReview({ config, onError, onExportToPrompt }: { confi
         const failures: { sceneId: string; shotId: string; action: string }[] = [];
 
         for (let i = 0; i < pending.length; i += CONCURRENCY) {
+            if (abortRef.current.signal.aborted) break;
             const batch = pending.slice(i, i + CONCURRENCY);
             const results = await Promise.allSettled(
                 batch.map(async ({ scene, shot }) => {
-                    const sceneContext = `${scene.title} - ${scene.summary}${scene.mood ? `，氛围：${scene.mood}` : ""}${scene.colorTone ? `，色调：${scene.colorTone}` : ""}${styleHint}`;
+                    // 从最新 store 状态获取数据，避免使用过期的闭包引用
+                    const latestCurrent = useStoryboardStore.getState().current;
+                    const latestScene = latestCurrent?.scenes.find(s => s.id === scene.id);
+                    const latestShot = latestScene?.shots.find(sh => sh.id === shot.id);
+                    if (!latestScene || !latestShot) return { sceneId: scene.id, shotId: shot.id, description: "[已删除]" };
+                    
+                    const sceneContext = `${latestScene.title} - ${latestScene.summary}${latestScene.mood ? `，氛围：${latestScene.mood}` : ""}${latestScene.colorTone ? `，色调：${latestScene.colorTone}` : ""}${styleHint}`;
                     const description = await aiGenerateVisualDescription(
                         config,
-                        { shotType: shot.shotType, angle: shot.angle, action: shot.action, mood: shot.mood, dialogue: shot.dialogue, cameraMovement: shot.cameraMovement, lens: shot.lens, lighting: shot.lighting },
+                        { shotType: latestShot.shotType, angle: latestShot.angle, action: latestShot.action, mood: latestShot.mood, dialogue: latestShot.dialogue, cameraMovement: latestShot.cameraMovement, lens: latestShot.lens, lighting: latestShot.lighting },
                         sceneContext,
                         assetsCtx || undefined,
                         undefined,

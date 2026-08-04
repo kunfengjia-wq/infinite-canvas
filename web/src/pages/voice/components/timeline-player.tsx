@@ -11,18 +11,27 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
     const [playing, setPlaying] = useState(false);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [totalProgress, setTotalProgress] = useState(0); // 全局进度
+    const [currentTime, setCurrentTime] = useState(0);
 
     const doneLines = current?.lines.filter((l) => l.status === "done" && l.audioUrl) ?? [];
     const totalDuration = doneLines.reduce((acc, l) => acc + (l.duration ?? 0), 0);
 
+    // 用 ref 存储最新值，避免闭包陈旧引用
+    const doneLinesRef = useRef(doneLines);
+    const totalDurationRef = useRef(totalDuration);
+    doneLinesRef.current = doneLines;
+    totalDurationRef.current = totalDuration;
+
     // 播放当前片段
     const playAt = useCallback((idx: number) => {
-        if (idx < 0 || idx >= doneLines.length) {
+        const lines = doneLinesRef.current;
+        const total = totalDurationRef.current;
+        if (idx < 0 || idx >= lines.length) {
             setPlaying(false);
             return;
         }
         setCurrentIdx(idx);
-        const line = doneLines[idx];
+        const line = lines[idx];
         if (!line.audioUrl) return;
 
         if (audioRef.current) {
@@ -32,10 +41,11 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         audioRef.current = audio;
 
         audio.ontimeupdate = () => {
+            setCurrentTime(audio.currentTime);
             if (audio.duration) {
                 // 全局进度
-                const elapsed = doneLines.slice(0, idx).reduce((a, l) => a + (l.duration ?? 0), 0) + audio.currentTime;
-                setTotalProgress(totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0);
+                const elapsed = lines.slice(0, idx).reduce((a, l) => a + (l.duration ?? 0), 0) + audio.currentTime;
+                setTotalProgress(total > 0 ? (elapsed / total) * 100 : 0);
             }
         };
         audio.onended = () => {
@@ -43,7 +53,7 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         };
         void audio.play();
         setPlaying(true);
-    }, [doneLines, totalDuration]);
+    }, []);
 
     const togglePlay = () => {
         if (playing) {
@@ -55,7 +65,10 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
     };
 
     useEffect(() => {
-        return () => { audioRef.current?.pause(); };
+        return () => {
+            audioRef.current?.pause();
+            audioRef.current = null;
+        };
     }, []);
 
     if (!current || doneLines.length === 0) return null;
@@ -66,8 +79,7 @@ export function TimelinePlayer({ onEditLine }: { onEditLine?: (lineId: string) =
         return `${m}:${sec.toString().padStart(2, "0")}`;
     };
 
-    const elapsed = doneLines.slice(0, currentIdx).reduce((a, l) => a + (l.duration ?? 0), 0)
-        + (audioRef.current?.currentTime ?? 0);
+    const elapsed = doneLines.slice(0, currentIdx).reduce((a, l) => a + (l.duration ?? 0), 0) + currentTime;
 
     return (
         <footer className="border-t border-stone-200 bg-stone-50/80 px-4 py-2.5 dark:border-stone-800 dark:bg-stone-900/40">

@@ -47,6 +47,7 @@ export function useVersionCheck() {
     const checkLatestRelease = useCallback(
         async (showMessage = false) => {
             setChecking(true);
+            let success = false;
             try {
                 const [versionResponse, changelogResponse] = await Promise.all([fetch(latestVersionUrl), fetch(latestChangelogUrl)]);
                 if (!versionResponse.ok) throw new Error("版本读取失败");
@@ -55,15 +56,15 @@ export function useVersionCheck() {
                 setLatestVersion(version.trim() || currentVersion);
                 if (changelog.trim()) setReleases(parseChangelog(changelog));
                 if (showMessage) message.success("已获取最新版本信息");
-                return true;
+                success = true;
             } catch {
                 setLatestVersion(currentVersion);
                 setReleases(localReleases);
                 if (showMessage) message.error("获取最新版本信息失败");
-                return false;
             } finally {
                 setChecking(false);
             }
+            return success;
         },
         [currentVersion, localReleases, message],
     );

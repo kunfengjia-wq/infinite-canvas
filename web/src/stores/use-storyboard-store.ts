@@ -136,7 +136,6 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
             if (!state.current) return state;
             return { current: { ...state.current, status: "assets_confirmed" as StoryboardStatus }, step: 3 as StoryboardStep };
         });
-        void get().saveCurrent();
     },
 
     // ─── 场景 ───
@@ -176,7 +175,6 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
             const scenes = state.current.scenes.map((s) => ({ ...s, confirmed: true }));
             return { current: { ...state.current, scenes, status: "scenes_confirmed" as StoryboardStatus }, step: 4 as StoryboardStep };
         });
-        void get().saveCurrent();
     },
 
     // ─── 镜头 ───
@@ -248,14 +246,12 @@ export const useStoryboardStore = create<StoryboardStore>()((set, get) => ({
             const scenes = state.current.scenes.map((s) => ({ ...s, shots: s.shots.map((sh) => ({ ...sh, confirmed: true })) }));
             return { current: { ...state.current, scenes, status: "shots_confirmed" as StoryboardStatus }, step: 5 as StoryboardStep };
         });
-        void get().saveCurrent();
     },
 
     // ─── 画面描述 ───
     updateShotDescription: (sceneId, shotId, description) =>
         set((state) => {
             if (!state.current) return state;
-            pushUndo(state.current, `desc:${shotId}`);
             return {
                 current: {
                     ...state.current,

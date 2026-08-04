@@ -1,5 +1,5 @@
 import { LoaderCircle, Pause, Play, Plus, RefreshCw, Trash2, Volume2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App, Button, Input, Select, Tooltip } from "antd";
 
 import { useVoiceStore } from "../store/use-voice-store";
@@ -23,6 +23,14 @@ export function ScriptEditor() {
     const [showImport, setShowImport] = useState(false);
     const [playingId, setPlayingId] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // 组件卸载时释放 Audio 元素
+    useEffect(() => {
+        return () => {
+            audioRef.current?.pause();
+            audioRef.current = null;
+        };
+    }, []);
 
     if (!current) return null;
 

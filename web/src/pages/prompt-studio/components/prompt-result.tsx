@@ -7,7 +7,7 @@ import { aiGeneratePrompt, aiOptimizePrompt, aiScorePrompt, type QualityScoreRes
 import { submitFeedback, revokeFeedback } from "@/services/db/feedback-repo";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { AiConfig } from "@/stores/use-config-store";
-import { PLATFORM_LIST, PROMPT_CATEGORIES, STYLE_PRESETS, type PromptCategory } from "@/types/prompt-studio";
+import { PLATFORM_LIST, PROMPT_CATEGORIES, STYLE_PRESETS, type PromptCategory, type PromptPlatform } from "@/types/prompt-studio";
 import { cn } from "@/lib/utils";
 
 export function PromptResult({ config, onError }: { config: AiConfig; onError: (msg: string) => void }) {
@@ -23,8 +23,8 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
     const [batchOptimizing, setBatchOptimizing] = useState(false);
     const [batchScoring, setBatchScoring] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
-    const [failedIds, setFailedIds] = useState<string[]>([]);
-    const [failedAction, setFailedAction] = useState<"optimize" | "score" | null>(null);
+    const [failedOptimizeIds, setFailedOptimizeIds] = useState<string[]>([]);
+    const [failedScoreIds, setFailedScoreIds] = useState<string[]>([]);
     const [versionHistory, setVersionHistory] = useState<Record<string, { prompt: string; negativePrompt?: string; time: number }[]>>({});
 
     /** 保存版本历史（最多保留 3 版） */
@@ -33,6 +33,16 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
             const list = prev[entryId] ?? [];
             return { ...prev, [entryId]: [{ prompt, negativePrompt, time: Date.now() }, ...list].slice(0, 3) };
         });
+    };
+
+    /** 删除条目并同步清理关联状态 */
+    const handleRemoveEntry = (entryId: string) => {
+        removeEntry(entryId);
+        setVersionHistory((prev) => { const n = { ...prev }; delete n[entryId]; return n; });
+        setScoreResults((prev) => { const n = { ...prev }; delete n[entryId]; return n; });
+        setStreamingText((prev) => { const n = { ...prev }; delete n[entryId]; return n; });
+        setFailedOptimizeIds((prev) => prev.filter((id) => id !== entryId));
+        setFailedScoreIds((prev) => prev.filter((id) => id !== entryId));
     };
 
     if (!current || current.entries.length === 0) {
@@ -46,13 +56,13 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
     const filteredEntries = filterCategory === "all" ? current.entries : current.entries.filter((e) => e.category === filterCategory);
     const usedCategories = Array.from(new Set(current.entries.map((e) => e.category)));
 
-    const handleRegenerate = async (entryId: string, input: string, platform: string, styles?: { id: string; weight: number }[], customStyle?: string) => {
+    const handleRegenerate = async (entryId: string, input: string, platform: PromptPlatform, styles?: { id: string; weight: number }[], customStyle?: string) => {
         setRegeneratingId(entryId);
         setStreamingText((prev) => ({ ...prev, [entryId]: "" }));
         try {
             const entry = current?.entries.find((e) => e.id === entryId);
             if (entry) pushHistory(entryId, entry.prompt, entry.negativePrompt);
-            const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles, customStyle }, (delta) => {
+            const result = await aiGeneratePrompt(config, { input, platform, styles, customStyle }, (delta) => {
                 setStreamingText((prev) => ({ ...prev, [entryId]: (prev[entryId] ?? "") + delta }));
             });
             updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
@@ -65,11 +75,11 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         }
     };
 
-    const handleOptimize = async (entryId: string, prompt: string, platform: string) => {
+    const handleOptimize = async (entryId: string, prompt: string, platform: PromptPlatform) => {
         setOptimizingId(entryId);
         try {
             pushHistory(entryId, prompt, current?.entries.find((e) => e.id === entryId)?.negativePrompt);
-            const result = await aiOptimizePrompt(config, prompt, platform as never);
+            const result = await aiOptimizePrompt(config, prompt, platform);
             updateEntry(entryId, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
             message.success(result.note ? `已优化：${result.note}` : "已优化");
         } catch (error) {
@@ -79,10 +89,10 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         }
     };
 
-    const handleScore = async (entryId: string, prompt: string, platform: string) => {
+    const handleScore = async (entryId: string, prompt: string, platform: PromptPlatform) => {
         setScoringId(entryId);
         try {
-            const result = await aiScorePrompt(config, prompt, platform as never);
+            const result = await aiScorePrompt(config, prompt, platform);
             setScoreResults((prev) => ({ ...prev, [entryId]: result }));
             message.success(`评分：${result.overall.toFixed(1)}/10`);
         } catch (error) {
@@ -95,7 +105,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
     /** 批量优化所有条目 */
     const handleBatchOptimize = async () => {
         setBatchOptimizing(true);
-        setFailedIds([]);
+        setFailedOptimizeIds([]);
         const entries = filteredEntries;
         setBatchProgress({ done: 0, total: entries.length });
         const failures: string[] = [];
@@ -104,7 +114,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         for (let i = 0; i < entries.length; i += CONCURRENCY) {
             const batch = entries.slice(i, i + CONCURRENCY);
             const results = await Promise.allSettled(
-                batch.map((entry) => aiOptimizePrompt(config, entry.prompt, entry.platform as never)),
+                batch.map((entry) => aiOptimizePrompt(config, entry.prompt, entry.platform)),
             );
             results.forEach((result, j) => {
                 const entry = batch[j];
@@ -118,15 +128,14 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         }
 
         setBatchOptimizing(false);
-        setFailedIds(failures);
-        setFailedAction(failures.length > 0 ? "optimize" : null);
+        setFailedOptimizeIds(failures);
         message.success(failures.length === 0 ? `已优化 ${entries.length} 条` : `优化完成，${failures.length} 条失败`);
     };
 
     /** 批量评分所有条目 */
     const handleBatchScore = async () => {
         setBatchScoring(true);
-        setFailedIds([]);
+        setFailedScoreIds([]);
         const entries = filteredEntries;
         setBatchProgress({ done: 0, total: entries.length });
         const failures: string[] = [];
@@ -135,7 +144,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         for (let i = 0; i < entries.length; i += CONCURRENCY) {
             const batch = entries.slice(i, i + CONCURRENCY);
             const results = await Promise.allSettled(
-                batch.map((entry) => aiScorePrompt(config, entry.prompt, entry.platform as never)),
+                batch.map((entry) => aiScorePrompt(config, entry.prompt, entry.platform)),
             );
             results.forEach((result, j) => {
                 const entry = batch[j];
@@ -149,34 +158,49 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
         }
 
         setBatchScoring(false);
-        setFailedIds(failures);
-        setFailedAction(failures.length > 0 ? "score" : null);
+        setFailedScoreIds(failures);
         message.success(failures.length === 0 ? `已评分 ${entries.length} 条` : `评分完成，${failures.length} 条失败`);
     };
 
-    /** 重试失败条目（根据失败来源执行对应操作） */
+    /** 重试失败条目（优化和评分分别处理） */
     const handleRetryFailed = async () => {
-        if (failedIds.length === 0) return;
+        const allFailed = [...failedOptimizeIds, ...failedScoreIds];
+        if (allFailed.length === 0) return;
         setBatchOptimizing(true);
-        const toRetry = current!.entries.filter((e) => failedIds.includes(e.id));
-        const stillFailed: string[] = [];
-        for (const entry of toRetry) {
-            try {
-                if (failedAction === "score") {
-                    const result = await aiScorePrompt(config, entry.prompt, entry.platform as never);
-                    setScoreResults((prev) => ({ ...prev, [entry.id]: result }));
-                } else {
-                    const result = await aiOptimizePrompt(config, entry.prompt, entry.platform as never);
+        const stillFailedOptimize: string[] = [];
+        const stillFailedScore: string[] = [];
+
+        // 重试优化失败
+        if (failedOptimizeIds.length > 0) {
+            const toRetry = current!.entries.filter((e) => failedOptimizeIds.includes(e.id));
+            for (const entry of toRetry) {
+                try {
+                    const result = await aiOptimizePrompt(config, entry.prompt, entry.platform);
                     updateEntry(entry.id, { prompt: result.prompt, negativePrompt: result.negativePrompt, translation: result.translation, characterMapping: result.characterMapping });
+                } catch {
+                    stillFailedOptimize.push(entry.id);
                 }
-            } catch {
-                stillFailed.push(entry.id);
             }
         }
+
+        // 重试评分失败
+        if (failedScoreIds.length > 0) {
+            const toRetry = current!.entries.filter((e) => failedScoreIds.includes(e.id));
+            for (const entry of toRetry) {
+                try {
+                    const result = await aiScorePrompt(config, entry.prompt, entry.platform);
+                    setScoreResults((prev) => ({ ...prev, [entry.id]: result }));
+                } catch {
+                    stillFailedScore.push(entry.id);
+                }
+            }
+        }
+
         setBatchOptimizing(false);
-        setFailedIds(stillFailed);
-        setFailedAction(stillFailed.length > 0 ? failedAction : null);
-        message.success(stillFailed.length === 0 ? "重试全部成功" : `仍有 ${stillFailed.length} 条失败`);
+        setFailedOptimizeIds(stillFailedOptimize);
+        setFailedScoreIds(stillFailedScore);
+        const totalStillFailed = stillFailedOptimize.length + stillFailedScore.length;
+        message.success(totalStillFailed === 0 ? "重试全部成功" : `仍有 ${totalStillFailed} 条失败`);
     };
 
     const handleFeedback = (entryId: string, prompt: string, negativePrompt: string | undefined, platform: string, input: string, styles: { id: string; weight: number }[] | undefined, rating: 1 | -1) => {
@@ -209,9 +233,9 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                     <Button size="small" icon={batchScoring ? <LoaderCircle className="size-3 animate-spin" /> : <Star className="size-3" />} disabled={batchOptimizing || batchScoring} onClick={handleBatchScore}>
                         {batchScoring ? `评分中 ${batchProgress.done}/${batchProgress.total}` : "批量评分"}
                     </Button>
-                    {failedIds.length > 0 && (
+                    {(failedOptimizeIds.length > 0 || failedScoreIds.length > 0) && (
                         <Button size="small" danger icon={<RotateCcw className="size-3" />} disabled={batchOptimizing || batchScoring} onClick={handleRetryFailed}>
-                            重试失败（{failedIds.length}）
+                            重试失败（{failedOptimizeIds.length + failedScoreIds.length}）
                         </Button>
                     )}
                 </div>
@@ -278,7 +302,7 @@ export function PromptResult({ config, onError }: { config: AiConfig; onError: (
                                             <Button type="text" size="small" icon={<History className="size-3.5" />} />
                                         </Popover>
                                     )}
-                                    <Popconfirm title="删除此条目？" onConfirm={() => removeEntry(entry.id)} okText="删除" cancelText="取消">
+                                    <Popconfirm title="删除此条目？" onConfirm={() => handleRemoveEntry(entry.id)} okText="删除" cancelText="取消">
                                         <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} />
                                     </Popconfirm>
                                 </div>

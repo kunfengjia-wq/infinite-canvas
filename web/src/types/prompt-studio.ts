@@ -160,7 +160,7 @@ export type PromptGenerateRequest = {
 export type PromptEntry = {
     id: string;
     input: string;
-    platform: string;
+    platform: PromptPlatform;
     prompt: string;
     negativePrompt?: string;
     /** 中文对照：生成提示词的通俗中文翻译，便于不懂英文的用户理解与核对 */

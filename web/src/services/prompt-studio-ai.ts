@@ -592,11 +592,11 @@ function parsePromptResult(raw: string, platform: PromptPlatform): PromptGenerat
     // 1. 先分离角色映射块（[角色映射] 之后的内容为角色对应关系）
     const mappingMatch = text.match(/\[角色映射\][：:]?\s*/);
     if (mappingMatch && mappingMatch.index !== undefined) {
-        // 角色映射可能只有一行，取到行尾或下一个块标记
         const afterMapping = text.slice(mappingMatch.index + mappingMatch[0].length);
-        const mappingEnd = afterMapping.search(/\n\[|$/);
-        characterMapping = afterMapping.slice(0, mappingEnd === -1 ? undefined : mappingEnd).trim() || undefined;
-        text = text.slice(0, mappingMatch.index).trim() + (mappingEnd > 0 ? afterMapping.slice(mappingEnd).trim() : "");
+        const nextBlock = afterMapping.search(/\n\[/);
+        characterMapping = (nextBlock === -1 ? afterMapping.trim() : afterMapping.slice(0, nextBlock).trim()) || undefined;
+        const remaining = nextBlock === -1 ? "" : afterMapping.slice(nextBlock).trim();
+        text = (text.slice(0, mappingMatch.index).trim() + (remaining ? "\n" + remaining : "")).trim();
     }
 
     // 2. 分离中文对照块（[中文对照] 之后的内容为通俗中文翻译）

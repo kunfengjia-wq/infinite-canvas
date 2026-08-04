@@ -270,25 +270,27 @@ export async function aiGenerateSegment(
     contextSummary: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
-    const systemPrompt = (await getSkillPrompt("sc_segment_writer")) ?? SEGMENT_WRITER_SYSTEM;
-    const settingContext = buildSettingContext(setting);
-    const structureOverview = structure.beats.map((b) => `${b.index + 1}. ${b.label}：${b.summary}`).join("\n");
-    const userContent = [
-        `【故事设定】\n${settingContext}`,
-        `\n【整体结构】\n${structureOverview}`,
-        contextSummary ? `\n【前文摘要】\n${contextSummary}` : "",
-        previousContent ? `\n【前一段内容（末尾500字）】\n${previousContent.slice(-500)}` : "",
-        `\n【当前任务】\n请写第 ${beat.index + 1} 段「${beat.label}」：${beat.summary}\n情绪强度：${beat.intensity}/10`,
-        "\n请开始写作：",
-    ].filter(Boolean).join("\n");
+    return withRetry(async () => {
+        const systemPrompt = (await getSkillPrompt("sc_segment_writer")) ?? SEGMENT_WRITER_SYSTEM;
+        const settingContext = buildSettingContext(setting);
+        const structureOverview = structure.beats.map((b) => `${b.index + 1}. ${b.label}：${b.summary}`).join("\n");
+        const userContent = [
+            `【故事设定】\n${settingContext}`,
+            `\n【整体结构】\n${structureOverview}`,
+            contextSummary ? `\n【前文摘要】\n${contextSummary}` : "",
+            previousContent ? `\n【前一段内容（末尾500字）】\n${previousContent.slice(-500)}` : "",
+            `\n【当前任务】\n请写第 ${beat.index + 1} 段「${beat.label}」：${beat.summary}\n情绪强度：${beat.intensity}/10`,
+            "\n请开始写作：",
+        ].filter(Boolean).join("\n");
 
-    const messages: AiTextMessage[] = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-    ];
-    const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
-    recordGeneration({ skillId: "sc_segment_writer", inputText: beat.summary.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
-    return raw.trim();
+        const messages: AiTextMessage[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        recordGeneration({ skillId: "sc_segment_writer", inputText: beat.summary.slice(0, 200), outputText: raw.slice(0, 500), model: config.model });
+        return raw.trim();
+    });
 }
 
 /** 重写段落（传入设定+前文上下文，避免破坏一致性） */
@@ -301,21 +303,23 @@ export async function aiRewriteSegment(
     previousContent?: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
-    const settingContext = setting ? buildSettingContext(setting) : "";
-    const userParts: string[] = [
-        `【修改意见】${instruction}`,
-    ];
-    if (settingContext) userParts.push(`\n【故事设定（保持一致性）】\n${settingContext}`);
-    if (previousContent) userParts.push(`\n【前一段内容（末尾300字，确保衔接）】\n${previousContent.slice(-300)}`);
-    userParts.push(`\n【当前内容】\n${currentContent}`);
-    userParts.push("\n请根据修改意见重写，保持角色/设定/语气一致，输出完整内容：");
+    return withRetry(async () => {
+        const settingContext = setting ? buildSettingContext(setting) : "";
+        const userParts: string[] = [
+            `【修改意见】${instruction}`,
+        ];
+        if (settingContext) userParts.push(`\n【故事设定（保持一致性）】\n${settingContext}`);
+        if (previousContent) userParts.push(`\n【前一段内容（末尾300字，确保衔接）】\n${previousContent.slice(-300)}`);
+        userParts.push(`\n【当前内容】\n${currentContent}`);
+        userParts.push("\n请根据修改意见重写，保持角色/设定/语气一致，输出完整内容：");
 
-    const messages: AiTextMessage[] = [
-        { role: "system", content: SEGMENT_WRITER_SYSTEM },
-        { role: "user", content: userParts.join("\n") },
-    ];
-    const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
-    return raw.trim();
+        const messages: AiTextMessage[] = [
+            { role: "system", content: SEGMENT_WRITER_SYSTEM },
+            { role: "user", content: userParts.join("\n") },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        return raw.trim();
+    });
 }
 
 /** 生成前文摘要（长篇上下文管理） */
@@ -324,12 +328,14 @@ export async function aiSummarizeContext(
     content: string,
     onDelta?: (text: string) => void,
 ): Promise<string> {
-    const messages: AiTextMessage[] = [
-        { role: "system", content: "你是文本摘要专家。将给定的剧本/小说内容压缩为 200-400 字的结构化摘要，保留：关键角色状态、已发生的重要事件、未解决的悬念/伏笔、当前情绪走向。直接输出摘要，不要加前缀。" },
-        { role: "user", content: `请摘要以下内容：\n\n${content.slice(0, 6000)}` },
-    ];
-    const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
-    return raw.trim();
+    return withRetry(async () => {
+        const messages: AiTextMessage[] = [
+            { role: "system", content: "你是文本摘要专家。将给定的剧本/小说内容压缩为 200-400 字的结构化摘要，保留：关键角色状态、已发生的重要事件、未解决的悬念/伏笔、当前情绪走向。直接输出摘要，不要加前缀。" },
+            { role: "user", content: `请摘要以下内容：\n\n${content.slice(0, 6000)}` },
+        ];
+        const raw = await requestImageQuestion(config, messages, onDelta ?? (() => {}));
+        return raw.trim();
+    });
 }
 
 // ─── Phase 5：一致性检查 ────────────────────────────────────────
@@ -403,6 +409,9 @@ export async function aiFixConsistencyIssues(
 - 修复后直接输出完整剧本，不要输出任何解释或标记
 - 如果报告全部通过（无⚠️），原样输出剧本`;
     const settingContext = buildSettingContext(setting);
+    if (fullScript.length > 15000) {
+        console.warn(`剧本过长(${fullScript.length}字)，AI修复将仅处理前15000字`);
+    }
     const messages: AiTextMessage[] = [
         { role: "system", content: systemPrompt },
         { role: "user", content: `【设定】\n${settingContext}\n\n【一致性检查报告】\n${report}\n\n【原始剧本】\n${fullScript.slice(0, 15000)}\n\n请修复上述问题，输出完整剧本：` },

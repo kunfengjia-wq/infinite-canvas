@@ -169,8 +169,20 @@ async function previewVoice(engine: string, voice: string, emotion?: string, emo
     });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play();
+    const cleanup = () => URL.revokeObjectURL(url);
+    audio.onended = cleanup;
+    audio.onerror = cleanup;
+    try {
+        await audio.play();
+    } catch {
+        cleanup();
+        throw new Error("播放失败");
+    }
+}
+
+// ─── Object URL 清理辅助 ────────────────────────────────────────
+function revokeUrl(url: string | undefined) {
+    if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
 // ─── Store ──────────────────────────────────────────────────────
@@ -301,6 +313,12 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     },
 
     deleteProject: async (id) => {
+        const proj = get().projects.find((p) => p.id === id);
+        if (proj) {
+            for (const line of proj.lines) {
+                revokeUrl(line.audioUrl);
+            }
+        }
         await remove(id);
         set((s) => ({
             projects: s.projects.filter((p) => p.id !== id),
@@ -380,6 +398,8 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
     removeLine: (id) => {
         const { current } = get();
         if (!current) return;
+        const removed = current.lines.find((l) => l.id === id);
+        revokeUrl(removed?.audioUrl);
         const updated = { ...current, lines: current.lines.filter((l) => l.id !== id) };
         set({ current: updated });
         void get().saveCurrent();
@@ -390,27 +410,28 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         if (!current) return;
         const lines: VoiceLine[] = [];
         const paragraphs = text.split(/\n+/).filter((p) => p.trim());
+        const newCharacters = [...current.characters];
 
         for (const para of paragraphs) {
-            const match = para.match(/^[【\[]?(.+?)[】\]]?\s*[:：]\s*(.+)$/s);
+            const match = para.match(/^[【[]?(.+?)[】]]?\s*[:：]\s*(.+)$/s);
             if (match) {
                 const charName = match[1].trim();
                 const content = match[2].trim();
-                let char = current.characters.find((c) => c.name === charName);
+                let char = newCharacters.find((c) => c.name === charName);
                 if (!char) {
-                    const color = CHARACTER_COLORS[current.characters.length % CHARACTER_COLORS.length];
+                    const color = CHARACTER_COLORS[newCharacters.length % CHARACTER_COLORS.length];
                     char = { id: nanoid(), name: charName, voice: "zf_xiaobei", color, isCloned: false, samples: [] };
-                    current.characters.push(char);
+                    newCharacters.push(char);
                 }
                 lines.push({ id: nanoid(), characterId: char.id, text: content, status: "pending", emotion: "neutral", emotionIntensity: 0.5 });
             } else {
-                const narrator = current.characters.find((c) => c.name === "旁白");
-                const charId = narrator?.id ?? current.characters[0]?.id ?? "narrator";
+                const narrator = newCharacters.find((c) => c.name === "旁白");
+                const charId = narrator?.id ?? newCharacters[0]?.id ?? "narrator";
                 lines.push({ id: nanoid(), characterId: charId, text: para.trim(), status: "pending", emotion: "neutral", emotionIntensity: 0.5 });
             }
         }
 
-        const updated = { ...current, lines: [...current.lines, ...lines] };
+        const updated = { ...current, characters: newCharacters, lines: [...current.lines, ...lines] };
         set({ current: updated });
         void get().saveCurrent();
     },
@@ -442,6 +463,8 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 reverb: current.effects.reverb || undefined,
                 gain: current.effects.gain || undefined,
             });
+            const oldLine = get().current?.lines.find((l) => l.id === lineId);
+            revokeUrl(oldLine?.audioUrl);
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
             await new Promise<void>((resolve) => { audio.onloadedmetadata = () => resolve(); });
@@ -518,6 +541,7 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const audioB64 = await urlToBase64(line.audioUrl);
         const resultB64 = await apiTrimAudio(audioB64, startMs, endMs);
         const blob = await (await fetch(`data:audio/wav;base64,${resultB64}`)).blob();
+        revokeUrl(line.audioUrl);
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         await new Promise<void>((resolve) => { audio.onloadedmetadata = () => resolve(); });
@@ -540,6 +564,7 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 const audioB64 = await urlToBase64(line.audioUrl);
                 const resultB64 = await apiApplyEffects(audioB64, effects);
                 const blob = await (await fetch(`data:audio/wav;base64,${resultB64}`)).blob();
+                revokeUrl(line.audioUrl);
                 const url = URL.createObjectURL(blob);
                 get().updateLine(line.id, { audioUrl: url });
             } catch {
@@ -558,6 +583,11 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
         const doneLines = current.lines.filter((l) => l.status === "done" && l.audioUrl);
         if (doneLines.length === 0) throw new Error("没有已生成的音频可导出");
+
+        const totalEstimate = doneLines.length * 2 * 1.33; // 粗略估计MB
+        if (totalEstimate > 50) {
+            throw new Error(`音频总量过大(约${Math.round(totalEstimate)}MB)，请分批导出`);
+        }
 
         // 收集所有音频 base64
         const segments: string[] = [];

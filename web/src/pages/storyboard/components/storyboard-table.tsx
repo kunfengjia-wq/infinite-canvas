@@ -86,20 +86,47 @@ export function StoryboardTable({ variant = "bottom", wide = false, maximized = 
     };
 
     const handleExportPdf = async () => {
-        const { jsPDF } = await import("jspdf");
-        const { default: autoTable } = await import("jspdf-autotable");
-        const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-        doc.setFontSize(14);
-        doc.text(current.title || "Storyboard", 14, 15);
-        autoTable(doc, {
-            startY: 20,
-            head: [["#", "Scene", "Shot", "Angle", "Camera", "Lighting", "Composition", "Action", "Dialogue", "Duration", "Description"]],
-            body: rows.map((r, i) => [i + 1, r.sceneTitle, r.shotType, r.angle, r.cameraMovement || "", r.lighting || "", r.composition || "", r.action, r.dialogue || "", r.duration || "", r.visualDescription]),
-            styles: { fontSize: 7, cellPadding: 2 },
-            headStyles: { fillColor: [59, 130, 246] },
-            columnStyles: { 7: { cellWidth: 45 }, 10: { cellWidth: 55 } },
-        });
-        doc.save(`${current.title || "storyboard"}.pdf`);
+        // 使用浏览器原生打印（支持中文）
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            console.error("无法打开打印窗口");
+            return;
+        }
+        
+        const rows = current.scenes.flatMap((s) => (s.shots ?? []).map((sh) => ({ ...sh, sceneTitle: s.title || `场景 ${s.index + 1}` })));
+        
+        const htmlRows = rows.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${r.sceneTitle}</td>
+                <td>${r.shotType || ""}</td>
+                <td>${r.angle || ""}</td>
+                <td>${r.cameraMovement || ""}</td>
+                <td>${r.action || ""}</td>
+                <td>${r.dialogue || ""}</td>
+                <td>${r.visualDescription || ""}</td>
+            </tr>
+        `).join("");
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"><title>${current.title || "分镜表"}</title>
+            <style>
+                body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+                th { background: #f5f5f5; font-weight: bold; }
+                h1 { font-size: 16px; margin-bottom: 10px; }
+            </style></head><body>
+            <h1>${current.title || "分镜表"}</h1>
+            <table>
+                <thead><tr><th>#</th><th>场景</th><th>景别</th><th>角度</th><th>运镜</th><th>动作</th><th>对白</th><th>画面描述</th></tr></thead>
+                <tbody>${htmlRows}</tbody>
+            </table>
+            </body></html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
     };
 
     // ─── 统计栏 ───

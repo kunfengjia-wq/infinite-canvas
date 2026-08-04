@@ -1,5 +1,5 @@
 import { Clapperboard, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Checkbox, Collapse, Input, Progress, Select, Tag } from "antd";
 
 import { usePromptStudioStore } from "@/stores/use-prompt-studio-store";
@@ -7,7 +7,7 @@ import { aiGeneratePrompt } from "@/services/prompt-studio-ai";
 import { getStoryboardRepo } from "@/services/db";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { Shot, StoryboardProject } from "@/types/storyboard";
-import type { PromptCategory } from "@/types/prompt-studio";
+import type { PromptCategory, PromptPlatform } from "@/types/prompt-studio";
 import { PLATFORM_LIST } from "@/types/prompt-studio";
 import { buildAssetContextForShot, describeShotAssets, shotHasContent, composeShotInput } from "@/lib/asset-context";
 
@@ -115,6 +115,8 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
     const [assetTemplates, setAssetTemplates] = useState<Map<string, string>>(new Map());
 
     const [progress, setProgress] = useState({ done: 0, total: 0 });
+    const abortRef = useRef<AbortController | null>(null);
+    const doneRef = useRef(0);
 
     // 加载分镜项目列表
     useEffect(() => {
@@ -277,14 +279,18 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
         setGenerating(true);
         setProgress({ done: 0, total: totalTasks });
 
-        try {
-            let done = 0;
-            const failures: string[] = [];
+        const controller = new AbortController();
+        abortRef.current = controller;
+        doneRef.current = 0;
 
-            /** 逐条生成并即时输出（单条失败不中断整体流程） */
-            const generateOne = async (input: string, platform: string, index: number, inputs: string[]) => {
+        try {
+            const failures: string[] = [];
+            const CONCURRENCY = 3;
+
+            /** 单条生成（单条失败不中断整体流程） */
+            const generateOne = async (input: string, platform: PromptPlatform, index: number) => {
                 try {
-                    const result = await aiGeneratePrompt(config, { input, platform: platform as never, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined });
+                    const result = await aiGeneratePrompt(config, { input, platform, styles: selectedStyles.length > 0 ? selectedStyles : undefined, customStyle: customStyle || undefined });
                     let category: PromptCategory;
                     let assetRef: string;
                     if (index < visualInputs.length) {
@@ -305,30 +311,46 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
                 } catch (err) {
                     failures.push(`第${index + 1}条(${platform}): ${err instanceof Error ? err.message : "未知错误"}`);
                 }
-                done++;
-                setProgress({ done, total: totalTasks });
+                doneRef.current++;
+                setProgress({ done: doneRef.current, total: totalTasks });
             };
 
-            // 图片平台：逐条生成即时输出
+            /** 分批并发执行任务列表 */
+            const runBatched = async (tasks: { input: string; platform: PromptPlatform; index: number }[]) => {
+                for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+                    if (controller.signal.aborted) break;
+                    const batch = tasks.slice(i, i + CONCURRENCY);
+                    await Promise.allSettled(batch.map((t) => generateOne(t.input, t.platform, t.index)));
+                }
+            };
+
+            // 图片平台
             if (hasImageContent) {
+                const tasks: { input: string; platform: PromptPlatform; index: number }[] = [];
                 for (const platform of imagePlatforms) {
                     for (let i = 0; i < imageInputs.length; i++) {
-                        await generateOne(imageInputs[i], platform, i, imageInputs);
+                        tasks.push({ input: imageInputs[i], platform, index: i });
                     }
                 }
+                await runBatched(tasks);
             }
 
-            // 视频平台：逐条生成即时输出
-            if (hasVideoContent) {
+            // 视频平台
+            if (hasVideoContent && !controller.signal.aborted) {
+                const tasks: { input: string; platform: PromptPlatform; index: number }[] = [];
                 for (const platform of videoPlatforms) {
                     for (let i = 0; i < videoInputs.length; i++) {
-                        await generateOne(videoInputs[i], platform, i, videoInputs);
+                        tasks.push({ input: videoInputs[i], platform, index: i });
                     }
                 }
+                await runBatched(tasks);
             }
 
             await usePromptStudioStore.getState().saveCurrent();
-            if (failures.length > 0) {
+            const done = doneRef.current;
+            if (controller.signal.aborted) {
+                message.warning(`已取消，已完成 ${done} 条`);
+            } else if (failures.length > 0) {
                 message.warning(`已生成 ${done - failures.length} 条，${failures.length} 条失败：${failures.slice(0, 3).join("；")}${failures.length > 3 ? "…" : ""}`);
             } else {
                 message.success(`已生成 ${done} 条提示词`);
@@ -336,8 +358,13 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
         } catch (error) {
             onError(error instanceof Error ? error.message : "批量生成失败");
         } finally {
+            abortRef.current = null;
             setGenerating(false);
         }
+    };
+
+    const handleCancelGenerate = () => {
+        abortRef.current?.abort();
     };
 
     const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
@@ -560,11 +587,11 @@ export function StoryboardSourcePanel({ config, onError, sourceStoryboardId, sou
                     type="primary"
                     block
                     icon={generating ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    loading={generating}
-                    disabled={checkedVisualShots.size + checkedStoryboardShots.size + checkedAssets.size === 0}
-                    onClick={handleGenerate}
+                    disabled={!generating && checkedVisualShots.size + checkedStoryboardShots.size + checkedAssets.size === 0}
+                    onClick={generating ? handleCancelGenerate : handleGenerate}
+                    danger={generating}
                 >
-                    生成选中（画面 {checkedVisualShots.size} + 分镜 {checkedStoryboardShots.size} + 资产 {checkedAssets.size} × {selectedPlatforms.length} 平台）
+                    {generating ? "取消生成" : `生成选中（画面 ${checkedVisualShots.size} + 分镜 ${checkedStoryboardShots.size} + 资产 ${checkedAssets.size} × ${selectedPlatforms.length} 平台）`}
                 </Button>
                 {generating && progress.total > 0 && <Progress percent={Math.round((progress.done / progress.total) * 100)} className="mt-2" size="small" format={() => `${progress.done}/${progress.total}`} />}
             </div>

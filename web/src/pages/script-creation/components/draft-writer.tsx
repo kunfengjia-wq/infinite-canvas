@@ -1,5 +1,5 @@
-import { Check, LoaderCircle, PenLine, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { Check, LoaderCircle, PenLine, RefreshCw, XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { App, Button, Input } from "antd";
 
 import { useScriptCreationStore } from "@/stores/use-script-creation-store";
@@ -13,6 +13,15 @@ export function DraftWriter({ config }: { config: AiConfig }) {
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [rewriteInstruction, setRewriteInstruction] = useState("");
     const [rewritingId, setRewritingId] = useState<string | null>(null);
+    const abortRef = useRef(false);
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+            abortRef.current = true;
+        };
+    }, []);
 
     if (!current || !current.finalSetting || !current.finalStructure) return null;
 
@@ -35,15 +44,19 @@ export function DraftWriter({ config }: { config: AiConfig }) {
             const prevSegment = segments[segment.index - 1];
             const previousContent = prevSegment?.content ?? "";
             const content = await aiGenerateSegment(config, current.finalSetting!, current.finalStructure!, beat, previousContent, current.contextSummary);
+            if (!mountedRef.current) return;
             updateSegment(segmentId, { content, status: "draft" });
             message.success(`「${segment.title}」已生成`);
         } catch (error) {
+            if (!mountedRef.current) return;
             updateSegment(segmentId, { status: "pending" });
             message.error(error instanceof Error ? error.message : "生成失败");
         } finally {
-            setGeneratingId(null);
-            setProcessing(false);
-            void saveCurrent();
+            if (mountedRef.current) {
+                setGeneratingId(null);
+                setProcessing(false);
+                void saveCurrent();
+            }
         }
     };
 
@@ -79,18 +92,32 @@ export function DraftWriter({ config }: { config: AiConfig }) {
 
     /** 生成所有段落（一键） */
     const handleGenerateAll = async () => {
+        abortRef.current = false;
         for (const segment of segments) {
+            if (abortRef.current) break;
             if (segment.status === "confirmed" || segment.status === "draft") continue;
             await handleGenerateSegment(segment.id);
+        }
+        if (abortRef.current) {
+            message.info("已取消生成");
+            return;
         }
         // 长篇自动生成摘要
         const allContent = useScriptCreationStore.getState().current?.segments.map((s) => s.content).join("\n\n") ?? "";
         if (allContent.length > 3000) {
             try {
                 const summary = await aiSummarizeContext(config, allContent);
-                setContextSummary(summary);
+                if (mountedRef.current) setContextSummary(summary);
             } catch { /* 静默 */ }
         }
+    };
+
+    /** 取消全部生成 */
+    const handleCancelAll = () => {
+        abortRef.current = true;
+        setProcessing(false);
+        setGeneratingId(null);
+        message.info("正在取消...");
     };
 
     /** 完稿 */
@@ -111,9 +138,17 @@ export function DraftWriter({ config }: { config: AiConfig }) {
                     </h2>
                     <p className="mt-1 text-sm text-stone-500">按结构逐段生成，每段确认后再继续（{confirmedCount}/{segments.length} 已确认）</p>
                 </div>
-                <Button icon={<RefreshCw className="size-4" />} onClick={handleGenerateAll} disabled={processing}>
-                    一键生成全部
-                </Button>
+                <div className="flex gap-2">
+                    {processing ? (
+                        <Button danger icon={<XCircle className="size-4" />} onClick={handleCancelAll}>
+                            取消生成
+                        </Button>
+                    ) : (
+                        <Button icon={<RefreshCw className="size-4" />} onClick={handleGenerateAll}>
+                            一键生成全部
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* 段落列表 */}

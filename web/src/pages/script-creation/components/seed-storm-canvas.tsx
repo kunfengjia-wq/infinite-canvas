@@ -55,43 +55,54 @@ interface Props {
 
 export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
     const [bubbles, setBubbles] = useState<Bubble[]>([]);
+    const bubblesRef = useRef<Bubble[]>([]);
     const [diverging, setDiverging] = useState<string | null>(null); // 正在发散的泡泡 id
     const [seedDiverging, setSeedDiverging] = useState(false);
     const [dragging, setDragging] = useState<string | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const animRef = useRef<number>(0);
+    const frameCountRef = useRef(0);
+    const draggingRef = useRef<string | null>(null);
 
-    // ─── 漂移动画 ───
+    // Keep refs in sync
+    useEffect(() => { bubblesRef.current = bubbles; }, [bubbles]);
+    useEffect(() => { draggingRef.current = dragging; }, [dragging]);
+
+    // ─── 漂移动画（节流渲染：每3帧触发一次 setState） ───
     useEffect(() => {
         const tick = () => {
-            setBubbles((prev) =>
-                prev.map((b) => {
-                    if (b.id === dragging) return b;
-                    let { x, y, vx, vy } = b;
-                    x += vx;
-                    y += vy;
-                    if (x < 8 || x > 92) vx = -vx * 0.8;
-                    if (y < 8 || y > 88) vy = -vy * 0.8;
-                    x = Math.max(8, Math.min(92, x));
-                    y = Math.max(8, Math.min(88, y));
-                    // 轻微减速
-                    vx *= 0.999;
-                    vy *= 0.999;
-                    return { ...b, x, y, vx, vy };
-                }),
-            );
+            const current = bubblesRef.current;
+            const dragId = draggingRef.current;
+            const updated = current.map((b) => {
+                if (b.id === dragId) return b;
+                let { x, y, vx, vy } = b;
+                x += vx;
+                y += vy;
+                if (x < 8 || x > 92) vx = -vx * 0.8;
+                if (y < 8 || y > 88) vy = -vy * 0.8;
+                x = Math.max(8, Math.min(92, x));
+                y = Math.max(8, Math.min(88, y));
+                vx *= 0.999;
+                vy *= 0.999;
+                return { ...b, x, y, vx, vy };
+            });
+            bubblesRef.current = updated;
+            frameCountRef.current++;
+            if (frameCountRef.current % 3 === 0) {
+                setBubbles([...updated]);
+            }
             animRef.current = requestAnimationFrame(tick);
         };
         animRef.current = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(animRef.current);
-    }, [dragging]);
+    }, []);
 
     // ─── 从种子发散 ───
     const handleDivergeFromSeed = useCallback(async () => {
         if (!seed.trim()) return;
         setSeedDiverging(true);
         try {
-            const existing = bubbles.map((b) => b.text);
+            const existing = bubblesRef.current.map((b) => b.text);
             const results = await aiDivergeFromBubble(config, seed.trim(), seed.trim(), existing);
             const newBubbles: Bubble[] = results.map((text, i) => ({
                 id: genId(),
@@ -104,16 +115,18 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
                 vy: (Math.random() - 0.5) * 0.3,
                 generation: 0,
             }));
-            setBubbles((prev) => [...prev, ...newBubbles].slice(-20));
+            const updated = [...bubblesRef.current, ...newBubbles].slice(-20);
+            bubblesRef.current = updated;
+            setBubbles(updated);
         } catch { /* 静默 */ }
         finally { setSeedDiverging(false); }
-    }, [config, seed, bubbles]);
+    }, [config, seed]);
 
     // ─── 从泡泡发散（传入种子上下文保持关联性） ───
     const handleDivergeFromBubble = useCallback(async (bubble: Bubble) => {
         setDiverging(bubble.id);
         try {
-            const existing = bubbles.map((b) => b.text);
+            const existing = bubblesRef.current.map((b) => b.text);
             const results = await aiDivergeFromBubble(config, bubble.text, seed.trim() || bubble.text, existing);
             const gen = Math.min(bubble.generation + 1, 2);
             const newBubbles: Bubble[] = results.map((text, i) => {
@@ -132,10 +145,12 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
                     generation: gen,
                 };
             });
-            setBubbles((prev) => [...prev, ...newBubbles].slice(-24));
+            const updated = [...bubblesRef.current, ...newBubbles].slice(-24);
+            bubblesRef.current = updated;
+            setBubbles(updated);
         } catch { /* 静默 */ }
         finally { setDiverging(null); }
-    }, [config, seed, bubbles]);
+    }, [config, seed]);
 
     // ─── 拖拽 ───
     const handlePointerDown = (id: string) => (e: React.PointerEvent) => {
@@ -147,7 +162,9 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
             if (!rect) return;
             const x = ((ev.clientX - rect.left) / rect.width) * 100;
             const y = ((ev.clientY - rect.top) / rect.height) * 100;
-            setBubbles((prev) => prev.map((b) => (b.id === id ? { ...b, x: Math.max(8, Math.min(92, x)), y: Math.max(8, Math.min(88, y)), vx: 0, vy: 0 } : b)));
+            const updated = bubblesRef.current.map((b) => (b.id === id ? { ...b, x: Math.max(8, Math.min(92, x)), y: Math.max(8, Math.min(88, y)), vx: 0, vy: 0 } : b));
+            bubblesRef.current = updated;
+            setBubbles(updated);
         };
         const onUp = () => {
             setDragging(null);
@@ -161,7 +178,9 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
     // ─── 移除泡泡 ───
     const removeBubble = (id: string) => (e: React.MouseEvent) => {
         e.stopPropagation();
-        setBubbles((prev) => prev.filter((b) => b.id !== id && b.parentId !== id));
+        const updated = bubblesRef.current.filter((b) => b.id !== id && b.parentId !== id);
+        bubblesRef.current = updated;
+        setBubbles(updated);
     };
 
     // ─── 双击空白 = 手动添加 ───
@@ -172,10 +191,10 @@ export function SeedStormCanvas({ config, seed, onFillSeed }: Props) {
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         const text = prompt("输入一个灵感关键词：");
         if (!text?.trim()) return;
-        setBubbles((prev) => [
-            ...prev,
-            { id: genId(), text: text.trim().slice(0, 6), x, y, color: randomColor(), size: "md", vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, generation: 0 },
-        ]);
+        const newBubble: Bubble = { id: genId(), text: text.trim().slice(0, 6), x, y, color: randomColor(), size: "md", vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, generation: 0 };
+        const updated = [...bubblesRef.current, newBubble];
+        bubblesRef.current = updated;
+        setBubbles(updated);
     };
 
     return (

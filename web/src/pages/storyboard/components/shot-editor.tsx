@@ -1,5 +1,5 @@
 import { Copy, GripVertical, LoaderCircle, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App, Button, Card, Collapse, Input, Popconfirm, Select, Tag } from "antd";
 import { nanoid } from "nanoid";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
@@ -137,6 +137,16 @@ export function ShotEditor({ config, onError }: { config: AiConfig; onError: (ms
     const [generatingScene, setGeneratingScene] = useState<string | null>(null);
     const [generatingAll, setGeneratingAll] = useState(false);
     const [allProgress, setAllProgress] = useState({ done: 0, total: 0 });
+    const abortRef = useRef(new AbortController());
+
+    useEffect(() => {
+        return () => abortRef.current.abort();
+    }, []);
+
+    useEffect(() => {
+        abortRef.current.abort();
+        abortRef.current = new AbortController();
+    }, [current?.id]);
 
     if (!current) return null;
     const scenes = current.scenes ?? [];

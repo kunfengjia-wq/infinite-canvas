@@ -24,6 +24,16 @@ export function AudioTrimmer({ lineId, audioUrl, duration }: Props) {
     const [dragging, setDragging] = useState<"start" | "end" | "region" | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+    // 组件卸载时关闭 AudioContext
+    useEffect(() => {
+        return () => {
+            sourceRef.current?.stop();
+            sourceRef.current = null;
+            audioCtxRef.current?.close();
+            audioCtxRef.current = null;
+        };
+    }, []);
+
     // 加载音频并绘制波形
     useEffect(() => {
         let cancelled = false;

@@ -184,7 +184,7 @@ export const useScriptCreationStore = create<ScriptCreationStore>()((set, get) =
     removeCardsByType: (type) =>
         set((state) => {
             if (!state.current) return state;
-            const cards = state.current.cards.filter((c) => c.type !== type || c.selected);
+            const cards = state.current.cards.filter((c) => c.type !== type);
             return { current: { ...state.current, cards } };
         }),
 
