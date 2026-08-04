@@ -1072,8 +1072,10 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
-    const script = resolveModelScript(config, config.model || config.textModel);
+    // 提示词生成是文本任务，必须优先使用 textModel（config.model 默认是图片模型）
+    const textModel = config.textModel || config.model;
+    const requestConfig = resolveModelRequestConfig(config, textModel);
+    const script = resolveModelScript(config, textModel);
     if (script) {
         try {
             const answer = await runModelPlugin<string>({
