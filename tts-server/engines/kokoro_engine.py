@@ -1,9 +1,13 @@
 """Kokoro-82M TTS 引擎 - 轻量级，CPU 可跑，实时率高"""
 import io
 import asyncio
+import concurrent.futures
 from functools import partial
 
 from .base import TTSEngine, VoiceInfo, SynthesisRequest
+
+# 专用线程池（避免与 onnxruntime 内部线程死锁）
+_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="kokoro")
 
 # Kokoro 内置音色
 KOKORO_VOICES = [
@@ -62,20 +66,29 @@ class KokoroEngine(TTSEngine):
         return KOKORO_VOICES
 
     async def synthesize(self, req: SynthesisRequest) -> bytes:
-        self._ensure_model()
-
         voice = req.voice if req.voice in [v.id for v in KOKORO_VOICES] else "zf_xiaobei"
         speed = max(0.5, min(2.0, req.speed))
 
-        # kokoro_onnx 是同步的，放到线程池
-        loop = asyncio.get_event_loop()
+        # 根据音色前缀判断语言
+        lang = "en-us"
+        if voice.startswith("zf_") or voice.startswith("zm_"):
+            lang = "cmn"
+        elif voice.startswith("jf_") or voice.startswith("jm_"):
+            lang = "ja"
+
+        # 模型加载 + 合成全部放专用线程池（避免 Windows 死锁）
+        loop = asyncio.get_running_loop()
         samples, sample_rate = await loop.run_in_executor(
-            None,
-            partial(self._model.create_audio, req.text, voice_id=voice, speed=speed),
+            _EXECUTOR,
+            partial(self._sync_create, req.text, voice, speed, lang),
         )
 
         # 转换为请求的格式
         return self._encode_audio(samples, sample_rate, req.response_format)
+
+    def _sync_create(self, text: str, voice: str, speed: float, lang: str):
+        self._ensure_model()
+        return self._model.create(text, voice=voice, speed=speed, lang=lang)
 
     def _encode_audio(self, samples, sample_rate: int, fmt: str) -> bytes:
         import soundfile as sf

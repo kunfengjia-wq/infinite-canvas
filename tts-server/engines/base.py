@@ -20,6 +20,7 @@ class SynthesisRequest:
     reference_audio: str | None = None  # base64, XTTS/GPT-SoVITS
     emotion: str = "neutral"            # happy/sad/angry/surprise/fear/disgust/neutral/gentle
     emotion_intensity: float = 0.5      # 0-1
+    style: str = ""                     # narration/dialogue/whisper/broadcast
     prompt_text: str | None = None      # 参考音频对应文本（GPT-SoVITS）
 
 

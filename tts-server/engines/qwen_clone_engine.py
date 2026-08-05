@@ -78,11 +78,15 @@ class QwenCloneEngine(TTSEngine):
             return
         import torch
         from qwen_tts import Qwen3TTSModel
+        from huggingface_hub import snapshot_download
+
+        # 解析本地缓存路径后传入，避免内部网络请求重试卡死（同 qwen_engine）
+        local_path = snapshot_download(MODEL_NAME, local_files_only=True)
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         self._model = Qwen3TTSModel.from_pretrained(
-            MODEL_NAME,
+            local_path,
             device_map=device,
             dtype=dtype,
         )
@@ -176,9 +180,12 @@ class QwenCloneEngine(TTSEngine):
     # ─── 合成 ─────────────────────────────────────────────────
 
     async def synthesize(self, req: SynthesisRequest) -> bytes:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, partial(self._sync_full_synthesize, req))
+
+    def _sync_full_synthesize(self, req: SynthesisRequest) -> bytes:
         self._ensure_model()
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, partial(self._sync_synthesize, req))
+        return self._sync_synthesize(req)
 
     def _sync_synthesize(self, req: SynthesisRequest) -> bytes:
         import soundfile as sf

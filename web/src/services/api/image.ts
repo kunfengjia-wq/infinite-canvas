@@ -1072,6 +1072,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
+    // 优先使用 config.model（用户可能手动设置了文本模型如 DeepSeek）
+    // 如果 config.model 是图片模型，用户需要在 UI 中切换到文本模型
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     const script = resolveModelScript(config, config.model || config.textModel);
     if (script) {
@@ -1099,7 +1101,9 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
             return answer;
         }
         // 百炼/硅基流动仅支持 /chat/completions，跳过 /responses 尝试
-        if (requestConfig.apiFormat === "dashscope" || requestConfig.apiFormat === "siliconflow") {
+        // 同时检测 baseUrl 是否包含 dashscope（兼容 apiFormat 为 "openai" 但实际是 DashScope 的情况）
+        const isDashScope = requestConfig.apiFormat === "dashscope" || requestConfig.baseUrl.includes("dashscope");
+        if (isDashScope || requestConfig.apiFormat === "siliconflow") {
             const answer = (await requestChatCompletionsStreaming(requestConfig, inputMessages, onDelta, options)).content || "没有返回内容";
             if (answer === "没有返回内容") onDelta(answer);
             return answer;

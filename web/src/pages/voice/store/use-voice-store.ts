@@ -79,7 +79,7 @@ function assertOnline(get: () => VoiceStore) {
 
 async function fetchModels(): Promise<TTSModelInfo[]> {
     try {
-        const res = await fetch(`${getTtsBase()}/v1/models`, { signal: AbortSignal.timeout(3000) });
+        const res = await fetch(`${getTtsBase()}/v1/models`, { signal: AbortSignal.timeout(6000) });
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []) as TTSModelInfo[];
@@ -96,6 +96,7 @@ interface SynthParams {
     referenceAudio?: string;
     emotion?: string;
     emotionIntensity?: number;
+    style?: string;
     pitchShift?: number;
     reverb?: number;
     gain?: number;
@@ -111,6 +112,7 @@ async function synthesize(params: SynthParams): Promise<Blob> {
         emotion: params.emotion ?? "neutral",
         emotion_intensity: params.emotionIntensity ?? 0.5,
     };
+    if (params.style) body.style = params.style;
     if (params.referenceAudio) body.reference_audio = params.referenceAudio;
     if (params.pitchShift) body.pitch_shift = params.pitchShift;
     if (params.reverb) body.reverb = params.reverb;
@@ -245,6 +247,7 @@ interface VoiceStore {
     loadProjects: () => Promise<void>;
     loadModels: () => Promise<void>;
     loadVoices: () => Promise<void>;
+    toggleEngine: (engineId: string) => Promise<void>;
     startPolling: () => void;
     stopPolling: () => void;
     createProject: (title: string, engine?: TTSEngineId) => Promise<string>;
@@ -297,6 +300,7 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let pollFailCount = 0;
 
 // ─── 防抖持久化（用于 updateLine 等高频操作）────────────────────
 let _saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -323,7 +327,16 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
     loadModels: async () => {
         const models = await fetchModels();
-        set({ models, ttsOnline: models.length > 0 });
+        if (models.length > 0) {
+            pollFailCount = 0;
+            set({ models, ttsOnline: true });
+        } else {
+            pollFailCount++;
+            if (pollFailCount >= 3) {
+                set({ ttsOnline: false });
+            }
+            // 不清空 models，保留上次数据
+        }
     },
 
     loadVoices: async () => {
@@ -338,6 +351,13 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
 
     stopPolling: () => {
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    },
+
+    toggleEngine: async (engineId: string) => {
+        try {
+            await fetch(`${getTtsBase()}/v1/models/${engineId}/toggle`, { method: "POST" });
+            await get().loadModels();
+        } catch { /* ignore */ }
     },
 
     createProject: async (title, engine = "kokoro-82m") => {
@@ -499,7 +519,15 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
         const char = current.characters.find((c) => c.id === line.characterId);
         const voice = char?.voice ?? "Vivian";
         const refAudio = char?.referenceAudio;
-        const engine = line.engineOverride || current.engine;
+        // 克隆音色自动路由到 clone 引擎
+        const engine = voice.startsWith("clone_") ? "qwen3-tts-clone" : (line.engineOverride || current.engine);
+
+        // 引擎未启用时直接友好提示，不等后端 403
+        const model = get().models.find((m) => m.id === engine);
+        if (model && !model.enabled) {
+            get().updateLine(lineId, { status: "error" });
+            throw new Error(`引擎「${model.display_name}」未启用，请在顶部引擎管理中开启`);
+        }
 
         set({ generatingLineId: lineId });
         get().updateLine(lineId, { status: "generating" });
@@ -508,13 +536,14 @@ export const useVoiceStore = create<VoiceStore>()((set, get) => ({
                 engine,
                 text: line.text,
                 voice,
-                speed: 1.0,
+                speed: line.speed ?? 1.0,
                 referenceAudio: refAudio,
                 emotion: line.emotion,
                 emotionIntensity: line.emotionIntensity,
-                pitchShift: current.effects.pitchShift || undefined,
+                style: line.style,
+                pitchShift: line.pitch || current.effects.pitchShift || undefined,
                 reverb: current.effects.reverb || undefined,
-                gain: current.effects.gain || undefined,
+                gain: (line.volume != null && line.volume !== 100) ? (line.volume - 100) * 0.4 : (current.effects.gain || undefined),
             });
             const url = URL.createObjectURL(blob);
             const oldLine = get().current?.lines.find((l) => l.id === lineId);

@@ -39,10 +39,23 @@ EMOTION_INSTRUCT = {
     "gentle": "用温柔轻柔的语气说",
 }
 
+# 说话风格 -> instruct
+STYLE_INSTRUCT = {
+    "narration": "用讲述故事的语气",
+    "dialogue": "",
+    "whisper": "小声轻语",
+    "broadcast": "用播音腔，字正腔圆",
+}
 
-def _build_instruct(emotion: str, intensity: float, speed: float) -> str | None:
-    """将情绪/强度/语速合成为 instruct 指令字符串"""
+
+def _build_instruct(emotion: str, intensity: float, speed: float, style: str = "") -> str | None:
+    """将情绪/强度/语速/风格合成为 instruct 指令字符串"""
     parts: list[str] = []
+
+    # 风格部分
+    style_text = STYLE_INSTRUCT.get(style, "")
+    if style_text:
+        parts.append(style_text)
 
     # 情绪部分
     emo_text = EMOTION_INSTRUCT.get(emotion, "")
@@ -99,11 +112,16 @@ class QwenTTSEngine(TTSEngine):
             return
         import torch
         from qwen_tts import Qwen3TTSModel
+        from huggingface_hub import snapshot_download
+
+        # 解析本地缓存路径后传入：本地路径加载完全不发网络请求，
+        # 避免 qwen_tts 内部不透传 local_files_only 导致的 HEAD 请求重试卡死
+        local_path = snapshot_download(MODEL_NAME, local_files_only=True)
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         self._model = Qwen3TTSModel.from_pretrained(
-            MODEL_NAME,
+            local_path,
             device_map=device,
             dtype=dtype,
         )
@@ -112,13 +130,16 @@ class QwenTTSEngine(TTSEngine):
         return QWEN_VOICES
 
     async def synthesize(self, req: SynthesisRequest) -> bytes:
-        self._ensure_model()
-
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
+        # 模型加载和合成都放线程池，避免 CUDA 底层崩溃杀死主进程
         audio_bytes = await loop.run_in_executor(
-            None, partial(self._sync_synthesize, req)
+            None, partial(self._sync_full_synthesize, req)
         )
         return audio_bytes
+
+    def _sync_full_synthesize(self, req: SynthesisRequest) -> bytes:
+        self._ensure_model()
+        return self._sync_synthesize(req)
 
     def _sync_synthesize(self, req: SynthesisRequest) -> bytes:
         import soundfile as sf
@@ -127,8 +148,8 @@ class QwenTTSEngine(TTSEngine):
         voice = req.voice if req.voice in _VOICE_LANG else "Vivian"
         language = _VOICE_LANG[voice]
 
-        # 构建 instruct 指令（情绪 + 语速）
-        instruct = _build_instruct(req.emotion, req.emotion_intensity, req.speed)
+        # 构建 instruct 指令（情绪 + 语速 + 风格）
+        instruct = _build_instruct(req.emotion, req.emotion_intensity, req.speed, req.style)
 
         # 调用官方 API
         kwargs = dict(text=req.text, speaker=voice, language=language)
