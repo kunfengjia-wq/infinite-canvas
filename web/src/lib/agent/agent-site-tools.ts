@@ -9,6 +9,7 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { modelOptionLabel, modelOptionName, normalizeModelOptionValue, selectableModelsByCapability, useConfigStore } from "@/stores/use-config-store";
 import { useWorkbenchAgentStore } from "@/stores/use-workbench-agent-store";
+import { WORKBENCH_TOOL_NAMES, WORKBENCH_TOOL_LABELS, runWorkbenchTool, type WorkbenchToolName } from "./agent-workbench-tools";
 
 // 在网页端执行 Agent 的「站点级」工具（画布列表、工作台生成、提示词搜索、资产增删查等）。
 // 这些工具的数据都在浏览器本地（localforage / zustand），因此由本模块直接读写对应 store 后返回结果。
@@ -43,12 +44,31 @@ export const SITE_TOOL_LABELS: Record<SiteToolName, string> = {
     assets_add: "添加资产",
 };
 
+// ─── 合并所有工具（站点工具 + 工作台工具）───────────────────────────
+
+export const ALL_TOOL_NAMES = [...SITE_TOOL_NAMES, ...WORKBENCH_TOOL_NAMES] as const;
+export type AllToolName = SiteToolName | WorkbenchToolName;
+
+export const ALL_TOOL_LABELS: Record<AllToolName, string> = {
+    ...SITE_TOOL_LABELS,
+    ...WORKBENCH_TOOL_LABELS,
+};
+
+export function isAllTool(name: string): name is AllToolName {
+    return (ALL_TOOL_NAMES as readonly string[]).includes(name);
+}
+
 type SiteToolInput = Record<string, unknown>;
 type SiteToolContext = { canvasSnapshot?: CanvasAgentSnapshot | null };
 type GenerationStatus = "idle" | "queued" | "running" | "succeeded" | "failed";
 type GenerationStatusItem = { id: string; source: "canvas" | "image" | "video"; status: GenerationStatus; kind?: string; title?: string; prompt?: string; projectId?: string; createdAt?: string; updatedAt?: string; successCount?: number; failCount?: number; error?: string };
 
 export async function runSiteTool(name: SiteToolName, input: SiteToolInput, navigate: NavigateFunction, context: SiteToolContext = {}): Promise<unknown> {
+    // 工作台工具：分发到 agent-workbench-tools
+    if (WORKBENCH_TOOL_NAMES.includes(name as WorkbenchToolName)) {
+        const config = useConfigStore.getState().config;
+        return runWorkbenchTool(name as WorkbenchToolName, input, config);
+    }
     switch (name) {
         case "canvas_list_projects":
             return listCanvasProjects(input);
