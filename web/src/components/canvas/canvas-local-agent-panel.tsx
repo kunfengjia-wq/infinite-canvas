@@ -14,6 +14,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentStore, type AgentAttachment, type AgentCanvasContext, type AgentChatItem, type AgentEventLog, type AgentPanelTab, type AgentPendingToolCall, type AgentThreadSummary } from "@/stores/use-agent-store";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { summarizeCanvasAgentOps, type CanvasAgentOp, type CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { isSiteTool, runSiteTool, SITE_TOOL_LABELS } from "@/lib/agent/agent-site-tools";
 import { AgentChatComposer, AgentChatMessage, AgentPanelTabs, AgentPendingToolCard, AgentWorkingMessage, type CanvasAgentChatAttachment } from "./canvas-agent-chat-ui";
@@ -423,6 +424,23 @@ export function CanvasLocalAgentPanel({ embedded, headless, autoConnect }: { emb
                 appliedOps = await attachmentNodeOps(endpoint, token, clientIdRef.current, payload.input?.nodes);
                 result = context.applyOps(appliedOps);
                 await postState(endpoint, token, clientIdRef.current, result as CanvasAgentSnapshot);
+            } else if (payload.name === "canvas_create_project") {
+                const title = String(payload.input?.title || "未命名画布");
+                const projectId = useCanvasStore.getState().createProject(title);
+                result = { ok: true, projectId, title };
+            } else if (payload.name === "canvas_add_node") {
+                const context = canvasContextRef.current;
+                if (!context) throw new Error("当前不在画布页，请先用 site_navigate 打开画布");
+                const ni = payload.input || {};
+                const op: CanvasAgentOp = {
+                    type: "add_node",
+                    nodeType: ni.type || ni.nodeType,
+                    title: ni.title,
+                    metadata: ni.content ? { content: ni.content } : undefined,
+                };
+                appliedOps = [op];
+                result = context.applyOps(appliedOps);
+                void postState(endpoint, token, clientIdRef.current, result as CanvasAgentSnapshot);
             } else {
                 const snapshot = canvasContextRef.current?.snapshot;
                 if (!snapshot) throw new Error("当前不在画布页，请先用 site_navigate 打开画布");
